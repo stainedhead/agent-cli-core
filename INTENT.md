@@ -8,7 +8,7 @@ policy engine, one response envelope with stable exit codes and untrusted-conten
 log, HTTP retry and redaction, a self-test runner and skill-document generation. It is a library: no
 binary, no vendor clients.
 
-**Status: draft PRD (v0.1) and project scaffold. No code and no release exist yet.**
+**Status: implemented (PRD draft v0.1); no tagged release yet.**
 
 ### The wider context
 The agentic-teammate project aims to let AI agents work as real teammates. Each agent runs inside
@@ -53,9 +53,9 @@ Root map: [stainedhead/agentic-teams](https://github.com/stainedhead/agentic-tea
 - **Deploying or operating the agent fleet.**
 
 ## Status and caution
-No code exists yet. This repository holds the draft PRD (v0.1) and a scaffold. **Nothing is released
-anywhere**, and `agent-okta-d` must publish a tagged release containing `pkg/client` before this
-library can compile against it.
+The library is implemented and tested, but **nothing is released anywhere**. It does not import
+`agent-okta-d`: `auth` defines its own daemon interface, and an adapter over `pkg/client` is deferred
+until `agent-okta-d` publishes a tagged release containing it.
 
 Okta's reach differs by system. Okta directly gates AWS and ServiceNow, which accept its tokens.
 GitHub and Microsoft 365 use the agent's own user account, gated by that account's state plus the
@@ -69,7 +69,7 @@ assumptions to validate, not facts.
 
 ## How this file is used
 INTENT.md captures *why* this library exists and where it sits in the set. The *how* lives in
-[agent-cli-core-PRD.md](specs/261003-agent-cli-core/agent-cli-core-PRD.md), and contributor rules in [AGENTS.md](AGENTS.md).
+[agent-cli-core-PRD.md](specs/archive/261003-agent-cli-core/agent-cli-core-PRD.md), and contributor rules in [AGENTS.md](AGENTS.md).
 Update this file when goals, direction or scope shift, or when the set around it changes, not when
 implementation details change. The PRD's evidence markers are authoritative; this file does not
 upgrade any of them.

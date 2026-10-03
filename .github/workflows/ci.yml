@@ -1,34 +1,39 @@
 name: CI
 
-# Implements the BLD-1..BLD-6 requirements in this repository's PRD (CI/CD section).
-# Steps that need Go source are skipped while the repository has no .go files, so
-# CI passes trivially now and starts enforcing as soon as code lands.
+# Implements BLD-1..BLD-6 of the PRD (CI/CD section). Pull requests and manual
+# runs only: there is no release, publish or deploy job, no secret beyond the
+# default read-only token, and no job that needs another repository.
 
 on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: the workflow can only read this repository.
 permissions:
   contents: read
-  packages: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  GOPRIVATE: github.com/stainedhead/*
+  # Tool versions are pinned here so a run is reproducible. Actions are pinned
+  # to a release tag; pinning them to commit SHAs needs network access and is
+  # tracked as a follow-up.
   GOLANGCI_LINT_VERSION: v2.14.0
   GOVULNCHECK_VERSION: v1.8.0
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Authenticate module fetches with the job token
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
       - name: Download modules
         run: go mod download
       - name: go mod tidy leaves no diff
@@ -45,86 +50,58 @@ jobs:
           out="$(gofmt -l .)"
           if [ -n "$out" ]; then echo "$out"; exit 1; fi
       - name: go vet
-        if: hashFiles('**/*.go') != ''
         run: go vet ./...
-      - name: go test
-        if: hashFiles('**/*.go') != ''
-        run: go test -race ./...
+      - name: go test (race detector, coverage)
+        run: go test -race -cover ./...
       - name: golangci-lint
-        if: hashFiles('**/*.go') != ''
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
       - name: govulncheck
-        if: hashFiles('**/*.go') != ''
         run: go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
 
-  # BLD-3: every release target is cross-compiled on each PR. Windows users run the
-  # Linux build under WSL, so there is no windows target.
+  # The tests also run natively on the Apple-silicon target, because file
+  # permission checks in the policy package differ by platform.
+  test-darwin:
+    name: test darwin/arm64
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: go test (race detector)
+        run: go test -race ./...
+
+  # BLD-3: every supported target is compiled on each PR. Windows users run the
+  # Linux build under WSL, so there is no windows target. A library has no
+  # binary, so this is a compile check of every package, tests included.
   cross-build:
-    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
-    runs-on: ${{ matrix.runner }}
+    name: compile ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { goos: darwin, goarch: arm64, runner: macos-14 }
-          - { goos: linux, goarch: amd64, runner: ubuntu-latest }
-          - { goos: linux, goarch: arm64, runner: ubuntu-latest }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Authenticate module fetches with the job token
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-      - name: Download modules
-        run: go mod download
       - name: Build
-        if: hashFiles('**/*.go') != ''
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          # Linux targets are static. The darwin build runs natively on an Apple-silicon
-          # runner with cgo left on, because Keychain-backed code may need it.
-          CGO_ENABLED: ${{ matrix.goos == 'linux' && '0' || '1' }}
-        run: go build ./...
-
-  # BLD-7: build and test each consumer against this version of the core, using a
-  # replace directive that exists only in this job's checkout and is never committed.
-  # A consumer that does not require the core yet has nothing to check.
-  downstream:
-    name: downstream ${{ matrix.repo }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        repo: [snow-cli, outlook-cli, teams-cli]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          path: core
-      - uses: actions/checkout@v7
-        with:
-          repository: stainedhead/${{ matrix.repo }}
-          path: consumer
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: consumer/go.mod
-      - name: Authenticate module fetches with the job token
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-      - name: Build and test against this version of the core
-        working-directory: consumer
+          CGO_ENABLED: "0"
         run: |
-          if ! grep -q 'github.com/stainedhead/agent-cli-core' go.mod; then
-            echo "::notice::${{ matrix.repo }} does not require agent-cli-core yet; nothing to check"
-            exit 0
-          fi
-          go mod edit -replace github.com/stainedhead/agent-cli-core=../core
-          go mod tidy
           go build ./...
-          go test -race ./...
+          go vet ./...

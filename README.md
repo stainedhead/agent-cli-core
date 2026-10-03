@@ -1,8 +1,8 @@
 # agent-cli-core
 
-`agent-cli-core` is a planned Go library (module `github.com/stainedhead/agent-cli-core`) holding the behavior shared by the agent-facing CLIs `snow`, `outlook` and `teams`. It has no binary and no vendor clients.
+`agent-cli-core` is a Go library (module `github.com/stainedhead/agent-cli-core`) holding the behavior shared by the agent-facing CLIs `snow`, `outlook` and `teams`. It has no binary and no vendor clients.
 
-**Status: Draft PRD (v0.1), no code, no release.** This repository currently holds the PRD and project scaffolding. Nothing can be imported yet.
+**Status: implemented and tested; no release has been tagged yet.** Until the first tag (planned `0.1.0`) there is no version to depend on; see "Adding the dependency".
 
 For purpose, wider context and scope boundary, see [INTENT.md](INTENT.md).
 
@@ -22,31 +22,65 @@ flowchart BT
     core --> teams["teams-cli<br/>(teams)"]
 ```
 
-Arrows read "is depended on by". `agent-okta-d` must publish a tagged release containing `pkg/client` before this library can compile; that is an open item (PRD section 13).
+Arrows read "is depended on by". This library does not import `agent-okta-d` yet: `auth` defines its own small daemon interface, and an adapter over `pkg/client` is deferred until that module has a tagged release.
 
-## Packages (planned)
+## Packages
 
-| Package | Responsibility |
-|---|---|
-| `auth` | `TokenSource` interface; daemon-backed source wrapping `pkg/client`; one forced refresh and retry on 401; `reauth_required` and 403 handling; never prints or logs tokens |
-| `policy` | YAML policy engine: allow/deny per verb and resource, field allowlists, limits, write modes |
-| `output` | Response envelope, truncation, untrusted-content marking, exit codes 0-9 |
-| `audit` | JSONL audit log, no secrets |
-| `httpx` | Retries with jitter, `Retry-After` handling, redacted tracing |
-| `selftest` | Expected-allow/deny matrix runner |
-| `docgen` | Generates the harness skill document from a command tree |
+| Package | Responsibility | Guide |
+|---|---|---|
+| `output` | Response envelope, exit codes 0-9, untrusted-content marking, bounded and pageable output, json/table/text | [output](user-docs/output.md) |
+| `auth` | `TokenSource` / `DaemonClient` interfaces, daemon-backed source, redacting token, 401 refresh hook; `auth/authtest` fakes | [auth](user-docs/auth.md) |
+| `policy` | Strict-YAML guardrail policy: allow/deny per verb and resource, field allowlists, constraints, write modes, rate limits, caps | [policy](user-docs/policy.md) |
+| `audit` | JSON Lines audit log, no secrets, no bodies | [audit](user-docs/audit.md) |
+| `httpx` | Retrying HTTP transport: jitter, `Retry-After`, idempotency rules, one refresh on 401, host allow-list and redirect check, redacted tracing | [httpx](user-docs/httpx.md) |
+| `selftest` | Expected-allow/deny matrix runner | [selftest](user-docs/selftest.md) |
+| `docgen` | Deterministic SKILL.md from a command tree | [docgen](user-docs/docgen.md) |
 
-## How a CLI will depend on it
+Platforms: darwin/arm64, linux/amd64, linux/arm64 (Windows users: WSL2). Go 1.27. One third-party dependency, `github.com/goccy/go-yaml`, used by `policy`.
 
-Once a release exists, a CLI declares the dependency in `go.mod` at a released semver tag. There are no pseudo-versions and no `replace` directives on `main`. In CI, each job resolves modules with its own job token (`GITHUB_TOKEN`), with no personal access token or stored secret (PRD section 14.3). No release exists yet.
+## Adding the dependency
+
+No version is tagged yet. Once a release exists, declare it at a released semver tag:
+
+```
+go get github.com/stainedhead/agent-cli-core@vX.Y.Z
+```
+
+(`vX.Y.Z` is a placeholder.) There are no pseudo-versions and no `replace` directives on `main`. In CI, resolve modules with the job's own `GITHUB_TOKEN`; no personal access token is needed.
+
+## Quick look
+
+```go
+env := output.Success(items, &output.Meta{})
+if err != nil {
+    env = output.FromError(err)
+}
+_ = output.Write(os.Stdout, env, output.Options{})
+os.Exit(int(env.ExitCode()))
+```
+
+See [Getting started](user-docs/getting-started.md) for the full flow (policy, auth, httpx, output, audit).
+
+## Not included, deferred
+
+Human-mode login (browser PKCE, OS keychain), the adapter over `agent-okta-d` `pkg/client`, a conformance test kit, `apidiff` enforcement and release automation are deferred; some PRD items remain unconfirmed. The full list with reasons is in [Assumptions and deferred work](user-docs/README.md#assumptions-and-deferred-work).
 
 ## Documentation
 
-- [INTENT.md](INTENT.md) - why this library exists and where it fits in the set
-- [agent-cli-core-PRD.md](specs/261003-agent-cli-core/agent-cli-core-PRD.md) - the product requirements document
+For developers building a CLI on the library:
+
+- [user-docs/README.md](user-docs/README.md) - index of all guides
+- [Getting started](user-docs/getting-started.md)
+- [Configuration reference](user-docs/configuration.md)
+- [Usage examples](user-docs/examples.md)
+- Per-package guides: [output](user-docs/output.md), [auth](user-docs/auth.md), [policy](user-docs/policy.md), [audit](user-docs/audit.md), [httpx](user-docs/httpx.md), [selftest](user-docs/selftest.md), [docgen](user-docs/docgen.md)
+
+For contributors:
+
+- [INTENT.md](INTENT.md) - why this library exists and where it fits
 - [AGENTS.md](AGENTS.md) - contributor and agent rules
-- [docs/](docs/) - product and technical docs, ADRs
-- [user-docs/](user-docs/) - guides for developers who consume the library (none yet)
+- [docs/](docs/) - [product summary](docs/product-summary.md), [product details](docs/product-details.md), [technical details](docs/technical-details.md), [architectural decision record](docs/architectural-decision-record.md)
+- [specs/archive/261003-agent-cli-core/](specs/archive/261003-agent-cli-core/) - the PRD and feature spec
 
 ## Related repositories
 
@@ -61,5 +95,8 @@ Part of the set rooted at [stainedhead/agentic-teams](https://github.com/stained
 ## Development
 
 ```
-make fmt vet lint test
+make check      # gofmt, vet, golangci-lint, tests with -race, three-target compile
+make vuln       # govulncheck (needs network)
 ```
+
+There is no `make build`: this is a library.

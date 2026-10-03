@@ -1,0 +1,9 @@
+id        title            state
+--------  ---------------  -----
+ITEM0004  Widget number 4  open
+ITEM0005  Widget number 5  open
+ITEM0006  Widget number 6  open
+ITEM0007  Widget number 7  open
+ITEM0008  Widget number 8  open
+ITEM0009  Widget number 9  open
+-- count=6 truncated=false

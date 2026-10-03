@@ -23,7 +23,7 @@ func sendErrWith(secret string) error {
 func TestRateLimitedSendErrorScrubbed(t *testing.T) {
 	rt := &failingRT{errs: []error{sendErrWith(leakSecret), sendErrWith(leakSecret)}}
 	tr := NewTransport(rt, Config{Clock: newFake(), MaxRetries: 1, Redactor: redact.New(leakSecret)})
-	req, _ := http.NewRequest(http.MethodGet, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	var rl *RateLimitedError
 	if !errors.As(err, &rl) {
@@ -42,7 +42,7 @@ func TestRateLimitedSendErrorScrubbed(t *testing.T) {
 func TestNonRetriedSendErrorScrubbed(t *testing.T) {
 	rt := &failingRT{errs: []error{sendErrWith(leakSecret)}}
 	tr := NewTransport(rt, Config{Clock: newFake(), Redactor: redact.New(leakSecret)})
-	req, _ := http.NewRequest(http.MethodPost, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodPost, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	if err == nil || strings.Contains(err.Error(), leakSecret) || strings.Contains(err.Error(), "sig=") {
 		t.Fatalf("leak: %v", err)
@@ -58,7 +58,7 @@ func TestHeldCredentialScrubbedFromSendError(t *testing.T) {
 	fr.token.Store("zzplainsecretzz")
 	rt := &failingRT{errs: []error{errors.New("proxy echoed zzplainsecretzz")}}
 	tr := NewTransport(rt, Config{Clock: newFake(), Refresher: fr})
-	req, _ := http.NewRequest(http.MethodPost, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodPost, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	if err == nil || strings.Contains(err.Error(), "zzplainsecretzz") {
 		t.Fatalf("leak: %v", err)

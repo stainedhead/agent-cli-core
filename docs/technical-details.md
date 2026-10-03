@@ -85,7 +85,19 @@ Golden files in `output/testdata` pin every format of success, error, untrusted,
 
 ## API: auth
 
-Not yet implemented. This section is filled in by the workstream that owns `auth`.
+Package `auth` (`github.com/stainedhead/agent-cli-core/auth`) obtains short-lived bearer tokens. Imports: `output`, `internal/redact` only. It never imports `httpx` or the credential daemon's module.
+
+- `Token` - redacting value: `String`, `GoString`, `Format` (every fmt verb), `MarshalJSON`, `MarshalText` and `LogValue` all give `[redacted]`. `NewToken(string)` builds one, `IsZero()` tests it; there is no accessor. The value reaches the network only through `Authorizer.Authorize`.
+- `TokenSource` `{Token(ctx) (Token, error)}`; optional `Refresher` `{Refresh(ctx) (Token, error)}`.
+- `DaemonClient` `{Fetch(ctx, provider) (Token, error); Refresh(ctx, provider) (Token, error)}` - the adapter point.
+- `NewDaemonTokenSource(client, provider, ...Option) (*DaemonTokenSource, error)`: provider is required (no default), no caching, no fallback. `WithRemediation(text)` adds the tool's exact re-enrollment instruction.
+- `NewAuthorizer(TokenSource) *Authorizer` with `Authorize(ctx, *http.Request) error` (sets `Authorization: Bearer ...` itself) and `Refresh(ctx) error` - exactly the methods of `httpx.TokenRefresher`; `Refresh` returns `ErrRefreshUnsupported` for a source that is not a `Refresher`.
+- Errors, all `output.CategoryAuth` (exit 3) and `output.Hinter` where useful: `ErrReauthRequired`, `ErrRevoked`, `ErrRefreshUnsupported` (sentinels); `*UnreachableError{Socket, Err}` (message names the socket and says the service may not be running); `*ActionRequiredError{Provider, Err, Remediation}` (generic human-action hint plus remediation); `*TokenError{Provider, Op, Err}` (other failures, message scrubbed).
+- `auth/authtest`: `Fake` (a `DaemonClient`) with `Scenario` `Valid`, `ExpiredNeedsRefresh`, `ReauthRequired`, `Revoked`, `Unreachable`, `UnauthorizedThenSuccess`, `UnauthorizedTwice`; `New(scenario, WithSocket(path))`; `Handler()` is the fake resource server (200 or 401); counters `Fetches`, `Refreshes`, `Requests`, `Providers`.
+
+Deferred: the adapter over the daemon's `pkg/client` (no tagged release yet; its Go surface is unconfirmed) and human-mode sources (PKCE login, OS keychain). A tool can supply its own `TokenSource`.
+
+Tests: table tests with the fake; `TestNoExportedFunctionReturnsTokenText` scans the package so no exported function returns string or bytes other than the redacted formatters and error text; leak tests across fmt, JSON, slog and error strings. Examples: `ExampleToken`, `ExampleAuthorizer`, `ExampleUnreachableError`, `ExampleWithRemediation`.
 
 ## API: policy
 

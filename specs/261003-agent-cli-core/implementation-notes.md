@@ -6,3 +6,12 @@ Purpose: record decisions and surprises during implementation. Update after each
 ## Edge Cases and Solutions
 ## Deviations from Plan
 ## Lessons Learned
+
+### auth
+- Own interfaces only (D4): `auth` imports neither `httpx` nor the daemon module. The adapter over the daemon's `pkg/client` is deferred until it has a tagged release; it will implement `auth.DaemonClient` and be the only importer. Its Go surface is unconfirmed (assumption); how it signals reauth/revoked/unreachable is mapped in the adapter.
+- `Token` has no accessor; the value is read only by unexported `reveal` inside `Authorizer.Authorize`. `Format` makes every fmt verb redact. Custom `TokenSource` implementers build tokens with `NewToken`.
+- `Authorizer` does not cache: the daemon owns caching. After `Refresh`, the next `Authorize` fetches the refreshed token. Forced refresh needs the source to implement `Refresher` (`DaemonTokenSource` does); otherwise `ErrRefreshUnsupported`.
+- Remediation text is attached by `WithRemediation` on the token source, so the library message stays generic and each tool adds its own command.
+- Daemon errors other than reauth/revoked/unreachable become `*TokenError` (category auth, exit 3, message scrubbed by `internal/redact`): a token that cannot be obtained is an auth failure and nothing else is tried.
+- `authtest.Fake` also serves a fake resource server (`Handler`) so 401 scenarios are testable without httpx; the 401-refresh-retry policy itself belongs to `httpx`. `UnreachableError` text contains the daemon service name as a string only.
+- Assumption: the 401 scenarios model the daemon PRD's refresh endpoint semantics; not verified against a real daemon.

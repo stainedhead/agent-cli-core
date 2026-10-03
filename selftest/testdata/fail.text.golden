@@ -1,0 +1,2 @@
+error: general: selftest: 1 of 3 rows failed: list-gadget (list gadget): expected deny, got allow
+hint: fix the failing rows or the target's configuration, then rerun the selftest command

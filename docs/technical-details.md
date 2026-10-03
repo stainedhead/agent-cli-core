@@ -149,7 +149,14 @@ Semantics: one attempt budget (`MaxRetries` re-sends) is shared by transient ret
 
 ## API: selftest
 
-Not yet implemented. This section is filled in by the workstream that owns `selftest`.
+Imports `output` and the standard library only.
+
+- `Outcome` (`Allow`, `Deny`), `Status` (`StatusPass`, `StatusFail`, `StatusSkip`).
+- `Row{Name, Verb, Resource, Expect, ReadOnly}`: one matrix line. `Probe func(ctx, Row) (Outcome, error)`: supplied by the tool; an error fails the row.
+- `Runner{Rows, Probe, ReadOnly}` and `Run(ctx) (Result, error)`: runs rows in order; with `ReadOnly` set, non-read-only rows are skipped. Returns a usage-category error (exit 2) for a nil probe or an invalid `Expect`, and the context error on cancellation.
+- `Result{Rows []RowResult, Passed, Failed, Skipped}`; `RowResult` embeds `Row` plus `Status`, `Actual`, `Detail`. `OK()`, `Envelope()` (success with the result as data, or a general-category failure naming each failing row), `ExitCode()` (0 or 1), `Write(w, output.Options) (output.ExitCode, error)`.
+
+The runner executes only when the tool calls `Run` (an explicit selftest command); it does no network access of its own. See `user-docs/selftest.md`.
 
 ## API: docgen
 

@@ -42,3 +42,9 @@ Purpose: record decisions and surprises during implementation. Update after each
 - Decisions: `httpx.Clock` is declared locally (structurally equal to `internal/clock.Clock`) so consumers can name the type; default is `clock.System`. `MaxRetries` is retries after the first attempt (0 means 3, negative means none). Retry-After waits are `min(Retry-After, MaxWait)` without jitter; backoff is jittered. Vendor code comes from response headers only via `Config.VendorCode`, so the body is never read. 401 refresh is allowed for non-idempotent requests if the body is replayable.
 - Assumption: persistent or non-retryable 429/502/503/504 and exhausted network errors become `*RateLimitedError` (exit 8), per the exit-code definition "rate limiting or transient failure persisted".
 - Deviation: none from the task list; 404/409/500 pass through as responses.
+
+### integration (WS-I)
+- No bridge code: `*auth.Authorizer` has exactly the `httpx.TokenRefresher` methods; `internal/integration` asserts it at compile time.
+- Bug found by the leak fuzz test and fixed in `httpx`: a server echoing the credential it was sent into a non-sensitive header (for example a vendor-code header) reached the trace and `ForbiddenError.VendorCode`, because the redactor only knew patterns. The transport now also scrubs the exact Authorization values it attached during that call.
+- Boundary documented, not fixed: data a server returns in a 200 body is passed through as the tool's data (marked untrusted by the tool); a daemon that puts a token in its own error text is only scrubbed when the token has a recognizable shape (Bearer, JWT, long opaque). Tokens shorter than 6 bytes are not value-scrubbed.
+- CI actions are pinned to release tags, not commit SHAs (SHA lookup needs network).

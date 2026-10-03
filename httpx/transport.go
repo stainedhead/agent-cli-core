@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/stainedhead/agent-cli-core/internal/redact"
 )
 
 type safeKey struct{}
@@ -73,6 +75,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	replayable := req.Body == nil || req.Body == http.NoBody || req.GetBody != nil
 	retriable := (idempotent(req.Method) || IsMarkedSafe(req)) && replayable
 	refreshed := false
+	// held collects the credentials this call attached, so a server that
+	// echoes one back (in a vendor code or any header) cannot get it into a
+	// trace or an error message.
+	var held []string
 
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
@@ -82,8 +88,9 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
+		held = holdCredentials(held, out.Header.Get("Authorization"))
 		resp, sendErr := t.base.RoundTrip(out)
-		t.trace(attempt, out, resp, sendErr)
+		t.trace(attempt, out, resp, sendErr, held)
 		canRetry := attempt <= t.cfg.MaxRetries
 
 		if sendErr != nil {
@@ -115,7 +122,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			continue
 		case http.StatusForbidden:
 			drain(resp)
-			return nil, t.forbidden(resp)
+			return nil, t.forbidden(resp, held)
 		case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 			wait := t.cfg.backoff(attempt - 1)
 			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
@@ -154,6 +161,29 @@ func (t *Transport) prepare(ctx context.Context, req *http.Request, attempt int)
 	return out, nil
 }
 
+// holdCredentials adds the Authorization header value and its credential part
+// (the text after the scheme) to held.
+func holdCredentials(held []string, header string) []string {
+	if header == "" {
+		return held
+	}
+	held = append(held, header)
+	if _, cred, ok := strings.Cut(header, " "); ok && cred != "" {
+		held = append(held, strings.TrimSpace(cred))
+	}
+	return held
+}
+
+// scrub applies the configured redactor and then removes every credential this
+// call attached.
+func (t *Transport) scrub(s string, held []string) string {
+	s = t.cfg.Redactor.String(s)
+	if len(held) == 0 {
+		return s
+	}
+	return redact.New(held...).String(s)
+}
+
 func (t *Transport) wait(d time.Duration) time.Duration {
 	if d > t.cfg.MaxWait {
 		return t.cfg.MaxWait
@@ -164,11 +194,11 @@ func (t *Transport) wait(d time.Duration) time.Duration {
 	return d
 }
 
-func (t *Transport) forbidden(resp *http.Response) error {
+func (t *Transport) forbidden(resp *http.Response, held []string) error {
 	e := &ForbiddenError{}
 	if t.cfg.VendorCode != nil {
 		code := strings.TrimSpace(t.cfg.VendorCode(resp.Header))
-		code = t.cfg.Redactor.String(code)
+		code = t.scrub(code, held)
 		if len(code) > maxVendorCode {
 			code = code[:maxVendorCode]
 		}

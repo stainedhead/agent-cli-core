@@ -1,0 +1,10 @@
+0 ok
+1 general
+2 usage
+3 auth
+4 forbidden
+5 not_found
+6 policy_denied
+7 conflict
+8 rate_limited
+9 validation

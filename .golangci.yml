@@ -8,6 +8,18 @@ linters:
     - ineffassign
     - unused
     - misspell
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+  exclusions:
+    rules:
+      # Doc-comment rules apply to the public API, not to tests.
+      - path: _test\.go
+        linters:
+          - revive
 formatters:
   enable:
     - gofmt

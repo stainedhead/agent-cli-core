@@ -1,0 +1,15 @@
+-
+  id: ITEM0000
+  title: Widget number 0
+  state: open
+
+-
+  id: ITEM0001
+  title: Widget number 1
+  state: open
+
+-
+  id: ITEM0002
+  title: Widget number 2
+  state: open
+-- count=3 truncated=false

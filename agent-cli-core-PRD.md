@@ -122,7 +122,7 @@ Origin: `snow-cli-PRD.md` §5 and AUTH-A1..A3; `outlook-cli-PRD.md` AUTH-1..4; `
 |---|---|---|
 | CORE-AUTH-1 | Define a `TokenSource` interface so a tool can obtain a bearer token without knowing where it comes from. | P0 |
 | CORE-AUTH-2 | Provide the daemon-backed `TokenSource`, wrapping `pkg/client`, parameterised by provider name (the tool supplies it, for example `servicenow` or `msgraph`). The core hard-codes no provider name. | P0 |
-| CORE-AUTH-3 | No fallback credentials: if the daemon socket is unreachable the operation fails and nothing else is tried. The exit code for this case is proposed as `3` ⚠️ (the sibling PRDs say "refuse to run" without naming a code). | P0 |
+| CORE-AUTH-3 | No fallback credentials: if the daemon socket is unreachable the operation fails and nothing else is tried. The CLI exits with code `3` and a clear, actionable message that the daemon could not be reached; the message names the socket that was tried and says the `agent-okta-d` service may not be running. Decided: exit code `3` is approved (the sibling PRDs say "refuse to run" without naming a code). | P0 |
 | CORE-AUTH-4 | On HTTP `401` from the vendor, force exactly one daemon refresh (the daemon exposes `POST /v1/credentials/{provider}/refresh`, `agent-okta-d-PRD.md` §11) and retry the request once. A second `401` exits `3`. | P0 |
 | CORE-AUTH-5 | If the daemon reports `reauth_required`, exit `3` with a message that a human action is needed. The core supplies the generic message; the tool supplies the exact remediation command (for example, outlook/teams: a human runs `agent-okta-d enroll msgraph`). | P0 |
 | CORE-AUTH-6 | On HTTP `403`, exit `4`, report the vendor error code, and **do not include the request body** in the error or the log. | P0 |
@@ -176,7 +176,7 @@ Origin: `snow-cli-PRD.md` §5 (envelope, exit codes, untrusted content, output b
 | `0` | ok |
 | `1` | general error |
 | `2` | usage |
-| `3` | auth (including `reauth_required`, second `401`, daemon unreachable ⚠️) |
+| `3` | auth (including `reauth_required`, second `401`, daemon unreachable, with a clear message) |
 | `4` | forbidden by server (`403` / ACL) |
 | `5` | not found |
 | `6` | denied by client policy |
@@ -291,7 +291,7 @@ Tests follow TDD (failing test first). PR CI uses no credentials and no network 
 ## 10. Non-functional requirements
 
 - **Stack:** Go, standard library plus a small set of dependencies (the YAML parser and `pkg/client` are the expected ones). The `go` directive follows the sibling repositories (`go 1.27`).
-- **Platforms:** must compile for `darwin/arm64`, `linux/amd64`, `linux/arm64`. `windows/amd64` is an open question (Q2) ⚠️.
+- **Platforms:** must compile for `darwin/arm64`, `linux/amd64`, `linux/arm64`. Native Windows is not a target: Windows users run the Linux build under WSL2 (decided).
 - **Overhead:** the library adds little latency compared with the vendor round trip; `snow-cli-PRD.md` §11 sets "local overhead < 50 ms" for the tool, which the core must not consume on its own ⚠️ (not measured).
 - **No `init()` side effects, no global mutable state, no network at import time;** everything is constructed explicitly so tests can inject fakes.
 - **Dependency footprint** kept small and reviewed, because every consumer inherits it.
@@ -322,13 +322,13 @@ The release pipeline (§14.2) is in place before the first tag. CI (§14.1) is i
 4. **One library, three consumers: coupling.** A breaking change forces three upgrades. *Recommendation:* small public surface, `internal/` by default, pre-1.0 minor bumps for breaks, the downstream compatibility build (§14.1) and possibly a conformance kit.
 5. **Guardrail mistaken for control.** *Recommendation:* the policy documentation and generated skill document state that server-side permissions are the boundary (CORE-POL-9).
 6. **Prompt-injection marking is a mitigation.** *Recommendation:* never describe it as sufficient; keep server-side limits.
-7. **Inconsistent Windows statements upstream.** `snow-cli-PRD.md` AUTH-H6 and §11 say Windows for human mode, while its §15.2 says native Windows is not a target and Windows users run the Linux build under WSL ⚠️. *Recommendation:* resolve in the `snow` PRD, then answer Q2 here.
+7. **Windows statements upstream (resolved).** `snow-cli-PRD.md` once said "Windows for human mode" while its CI/CD section said no native Windows build. Decided: native Windows is not required and Windows users run the Linux build under WSL2; the `snow` PRD was updated to match.
 8. **Sibling PRDs still call the core's location open.** *Recommendation:* update `snow-cli-PRD.md` §5/§15.3, `outlook-cli-PRD.md` and `teams-cli-PRD.md` to point at this repository (tracked as Q8).
 
 ## 13. Open questions
 
 1. **Where do human-mode PKCE and the keychain `TokenSource` live?** Only `snow` needs them (`snow-cli-PRD.md` AUTH-H1..H6). Options: in `snow-cli`; in this library as an optional package (adds OS-keychain and OAuth dependencies that `outlook` and `teams` would inherit); or in a second small module. Leaning (unverified): keep it in `snow-cli` so this library stays small.
-2. **Must the library compile for `windows/amd64`?** `snow-cli-PRD.md` says Windows for human mode (AUTH-H6, §11) but §15.2 says no native Windows build, only Linux under WSL ⚠️. If native Windows is required, the unix-socket client in `auth` and the OS-specific code need Windows variants or build tags; otherwise windows/amd64 can be excluded. Until decided, CI compiles darwin/arm64, linux/amd64, linux/arm64 and treats windows/amd64 as flagged.
+2. **Resolved: native Windows is not required.** The library does not need to compile for `windows/amd64`; Windows users run the Linux build under WSL2. CI compiles darwin/arm64, linux/amd64 and linux/arm64.
 3. **Who owns the policy schema?** A common schema in this library, or per-tool schemas that the engine merely evaluates? `snow` (§9), `outlook` (§9) and `teams` (§7) each define their own policy shape today; a shared vocabulary is assumed possible ⚠️. Ownership also decides who approves schema changes.
 4. **Library or tool: which package ships sample policy files?** The `snow` PRD ships sample `agent` and `human` policies with the binary (§15.5). This library should presumably ship none.
 5. **`pkg/client` tag.** What is the first released version of `agent-okta-d` containing `pkg/client`, and when? Blocks M0. Related: should `pkg/client` instead be its own tiny module so the core does not pull in the daemon's dependencies ⚠️ (not raised in the daemon PRD; the daemon PRD places it in the same module).
@@ -351,7 +351,7 @@ Applies to this repository. It is a **library**: there are no binaries and no co
 |---|---|
 | BLD-1 | CI runs on **every pull request targeting `main`** and **on demand** (`workflow_dispatch`, optionally against a chosen ref). CI also runs as the first stage of every release (REL-9), so nothing is released untested. |
 | BLD-2 | Checks: `gofmt -l .` is empty; `go mod tidy` leaves no diff; `go vet ./...`; `golangci-lint` at a pinned version; `go test -race ./...`; `govulncheck ./...`. |
-| BLD-3 | **Compile check** on each PR for `darwin/arm64`, `linux/amd64` and `linux/arm64` (for example `GOOS=... GOARCH=... go build ./...` and `go vet`). `windows/amd64` is flagged and **not required** until Q2 is decided. |
+| BLD-3 | **Compile check** on each PR for `darwin/arm64`, `linux/amd64` and `linux/arm64` (for example `GOOS=... GOARCH=... go build ./...` and `go vet`). Native Windows is not a target (Windows users run the Linux build under WSL2), so there is no `windows/amd64` check. |
 | BLD-4 | PR CI needs **no credentials and no network access to real systems**: tests use fakes, a fake daemon and fake clocks. Module downloads are the only network use. |
 | BLD-5 | The CI workflow is a **required status check** on `main` once branch protection is enabled. Branch protection is not configured yet; enabling it is a separate step. |
 | BLD-6 | Workflows use least privilege, pin the Go version from `go.mod`, and pin third-party actions to a version or commit SHA. |
@@ -400,7 +400,7 @@ BLD-1 to BLD-6 are in place before the first milestone that merges Go code (M1).
 ### 14.6 Open items (CI/CD)
 
 1. **Branch protection.** Not configured. Enable and make CI a required check (BLD-5) once the first workflow has run on a PR.
-2. **windows/amd64** compile check: decided with Q2.
+2. **windows/amd64** compile check: not needed; native Windows is not a target.
 3. **Signing.** Confirm keyless `cosign` is acceptable for a source-only library release ⚠️ (REL-1).
 4. **API-compat tool** (API-7, Q11) and whether it blocks.
 5. **Version bump rule.** PR labels are assumed (REL-7); conventional commits are the alternative.

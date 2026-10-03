@@ -1,0 +1,22 @@
+# Build / test output
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Go
+vendor/
+go.work
+go.work.sum
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

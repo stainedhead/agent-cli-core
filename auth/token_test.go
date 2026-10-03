@@ -70,3 +70,27 @@ func TestTokenIsZero(t *testing.T) {
 		t.Fatal("zero token must still redact")
 	}
 }
+
+// holder embeds a Token in unexported fields, where fmt cannot call its
+// methods and falls back to reflection.
+type holder struct {
+	tok  auth.Token
+	ptr  *auth.Token
+	list []auth.Token
+	m    map[string]auth.Token
+	any  any
+}
+
+func TestTokenUnexportedFieldDoesNotLeak(t *testing.T) {
+	tok := auth.NewToken(secret)
+	h := holder{tok: tok, ptr: &tok, list: []auth.Token{tok}, m: map[string]auth.Token{"k": tok}, any: tok}
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%x", "%X", "%q", "%d"} {
+		for _, arg := range []any{h, &h, []holder{h}, struct{ t auth.Token }{tok}} {
+			got := fmt.Sprintf(verb, arg)
+			if strings.Contains(got, secret) || strings.Contains(got, fmt.Sprintf("%x", secret)) ||
+				strings.Contains(strings.ToUpper(got), strings.ToUpper(fmt.Sprintf("%x", secret))) {
+				t.Fatalf("verb %s leaked: %s", verb, got)
+			}
+		}
+	}
+}

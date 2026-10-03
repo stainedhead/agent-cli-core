@@ -52,3 +52,7 @@ go test ./...
 ## Git
 
 Use clear commit messages. Do not force-push. Do not commit build output or `.env` files. Dependencies are declared in `go.mod` at released semver tags: no pseudo-versions and no `replace` directives on `main` (PRD section 14).
+
+## Agent skill
+
+How agents use this tool is documented in the root repository's skill document, `skills/agent-cli-core.md`, in https://github.com/stainedhead/agentic-teams (see `skills/README.md`). That is its only home; do not copy it here. A change to the envelope, exit codes, untrusted-content marking, output bounds, policy semantics, retry or idempotency behavior is not finished until that skill is updated (see SKILL-1..7 in the PRD).

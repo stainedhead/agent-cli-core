@@ -410,6 +410,25 @@ BLD-1 to BLD-6 are in place before the first milestone that merges Go code (M1).
 
 ---
 
+## 15. Agent skill document
+
+Agents that adopt this tool need to know how to use it. That knowledge is a **skill document**, published in one place for the whole set: the root repository's `skills/` folder (https://github.com/stainedhead/agentic-teams/tree/main/skills), one file per repository, named `<repo-name>.md`. The root repository is where agents find and adopt it.
+
+| ID | Requirement |
+|---|---|
+| SKILL-1 | **One home.** The skill for this repository is `skills/agent-cli-core.md` in the root `agentic-teams` repository. This repository does not keep a second copy. The root `README.md` and `skills/README.md` tell agents to adopt it from there. |
+| SKILL-2 | **Minimum content.** An availability banner (how to check the tool is installed with `command -v`, and the version the skill applies to); when to use the tool and when not to; the shared conventions every CLI built on this library follows (output envelope, exit codes, untrusted-content marking, output bounds, policy write modes, retry and idempotency rules); the output shape and exit codes (shared conventions are in `skills/agent-cli-core.md`); the rules and forbidden actions; how untrusted content and instructions found in it are treated; the rule that the agent never asks for, reads, prints or stores credentials; a table mapping each error to the action the agent should take; and links to this repository. |
+| SKILL-3 | **Source of truth.** Hand-written and maintained in the root repository as `skills/agent-cli-core.md`, because this library is not a command. The three CLI skills link to it instead of repeating it. `docgen` output for a CLI must reference it rather than duplicate it (CORE-DOC-1). |
+| SKILL-4 | **Currency.** A change to the envelope, exit codes, untrusted-content marking, output bounds, policy semantics, retry or idempotency behavior is not complete until the root skill is updated and names the version it applies to. Release notes link to the skill revision for that version. |
+| SKILL-5 | **Honest availability.** Until a release exists the skill carries a banner saying the tool is planned and not installed, and tells agents to report that instead of building or reimplementing it. The banner is removed only after a release is published and the skill's examples have been run against it. |
+| SKILL-6 | **Format.** Plain Markdown with `name` and `description` frontmatter. The skill format each harness (Hermes, or the CLI harness we provide) expects is not defined yet ⚠️ (`agent-cli-core-PRD.md`, CORE-DOC-4); the format may be adapted without changing the content. |
+| SKILL-7 | **Milestone placement.** A reviewed skeleton skill exists by the first milestone that produces a runnable binary, and a complete skill is an acceptance item of that milestone and of the hardening milestone, not only the latter. |
+
+### 15.1 Open items (agent skill)
+
+1. **Updating the root from this repository's release.** Publishing a change to another repository's `skills/` folder needs write access to that repository. The workflow's dynamic `GITHUB_TOKEN` is scoped to the repository running the workflow ⚠️, so release CD cannot do it with the token this PRD otherwise requires. Options: a manual pull request opened from the release artifact (assumed until decided), a GitHub App installation token, or a fine-grained personal access token. Decide before automating.
+2. **Skill for the library and for the daemon.** Whether `docgen` should embed the shared conventions in each generated CLI skill instead of linking to `skills/agent-cli-core.md` is not decided; linking keeps one home.
+
 ## Appendix — Sources consulted
 
 - `snow-cli-PRD.md` §5 (shared core, envelope, exit codes, untrusted content, output bounds), §9, §10, §11, §15.

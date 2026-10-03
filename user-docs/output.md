@@ -81,7 +81,7 @@ Return large results as an array or a string so they can be paged. Data of any o
 
 ## Secrets
 
-Error messages and hints are scrubbed of bearer tokens, JWTs, `token=`/`secret=` pairs and long opaque strings before they are written. Pass any secret your process holds in `Options.Secrets` to have it removed by value as well. Never put a token in `data`.
+Error messages and hints are scrubbed of bearer tokens, JWTs, `token=`/`secret=` pairs and long opaque strings before they are written. Ordinary words such as "basic" or "bearer" in prose are kept, and a 40-hex git commit id is not treated as a key. Pass any secret your process holds in `Options.Secrets` (or build the envelope with `output.FromErrorWithSecrets(err, secrets...)` / `output.FailureWithSecrets`) to have it removed by value as well. Never put a token in `data`.
 
 ## Troubleshooting
 

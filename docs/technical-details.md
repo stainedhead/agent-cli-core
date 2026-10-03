@@ -21,7 +21,7 @@ docgen   -> output
 
 Third-party dependency: `github.com/goccy/go-yaml`, for `policy`. It was chosen because it is maintained and supports strict decoding that rejects unknown keys (`yaml.Strict()` / `DisallowUnknownField`), which `policy` needs to fail closed. `gopkg.in/yaml.v3` offers `KnownFields(true)` too but is archived upstream.
 
-`internal/clock` provides `Clock` (`Now`, `Sleep`), the real `System` clock and a deterministic `Fake`. `internal/redact` provides `Redactor` (`New`, `String`, `Header`, `Body`, `Error`).
+`internal/clock` provides `Clock` (`Now`, `Sleep`), the real `System` clock and a deterministic `Fake`. `internal/redact` provides `Redactor` (`New`, `String`, `Header`, `Body`, `Error`). A bare `bearer`/`basic` is redacted only after an `authorization` key or when the next word looks like a credential (prose such as "basic usage" stays); runs of `OpaqueRunMin` (40) characters are redacted except a 40-digit lowercase hex git SHA-1.
 
 ## API: output
 
@@ -56,8 +56,8 @@ Package `output` is the contract between a CLI and the LLM harness: one envelope
 - `type Meta struct { Truncated bool; NextOffset *int; Count int; RequestID string }` with JSON keys `truncated`, `next_offset` (null when absent), `count`, `request_id` (omitted when empty).
 - `type Error struct { Code Category; Message, Hint string }` with JSON keys `code`, `message`, `hint` (omitted when empty).
 - `func Success(data any, meta *Meta) Envelope`.
-- `func Failure(c Category, message, hint string) Envelope`: message and hint are redacted.
-- `func FromError(err error) Envelope`: nil gives a success envelope with no data; otherwise code from `CategoryOf`, message `err.Error()`, hint from a `Hinter` in the chain, redacted.
+- `func Failure(c Category, message, hint string) Envelope`: message and hint are redacted with the built-in patterns. `FailureWithSecrets(c, message, hint, secrets...)` also removes the literal secrets.
+- `func FromError(err error) Envelope`: nil gives a success envelope with no data; otherwise code from `CategoryOf`, message `err.Error()`, hint from a `Hinter` found with `errors.As` (wrapped and `errors.Join`ed errors included), redacted. `FromErrorWithSecrets(err, secrets...)` also removes literal secrets.
 
 ### Untrusted content
 
@@ -143,7 +143,7 @@ Package `httpx` imports `output`, `internal/redact` and `internal/clock` only (n
 - `Clock` {`Now`, `Sleep(ctx, d) error`}: structurally satisfied by `internal/clock` (`System`, `Fake`).
 - `NewTransport(base http.RoundTripper, cfg Config) *Transport` (implements `http.RoundTripper`); `NewClient(cfg Config) *http.Client`.
 - `MarkSafeToRetry(*http.Request) *http.Request`, `IsMarkedSafe(*http.Request) bool`.
-- Errors (all implement `output.CategoryError` and `output.Hinter`): `*RateLimitedError{Status, Attempts, Err}` (exit 8), `*AuthError{Err}` (exit 3), `*ForbiddenError{VendorCode}` (exit 4). None carries a response body.
+- Errors (all implement `output.CategoryError` and `output.Hinter`): `*RateLimitedError{Status, Attempts, Err}` (exit 8), `*AuthError{Err}` (exit 3), `*ForbiddenError{VendorCode}` (exit 4). None carries a response body. Transport errors in `RateLimitedError.Err` and non-retried send errors are scrubbed (configured redactor plus the credentials the call attached) and the query string and userinfo of any `*url.Error` URL are dropped from the message; the original error stays reachable through `errors.As`.
 
 Semantics: one attempt budget (`MaxRetries` re-sends) is shared by transient retries and the single 401 refresh. Idempotent methods (GET, HEAD, OPTIONS, TRACE, PUT, DELETE) or requests marked safe are retried on 429, 502, 503, 504 and network errors, only if the body is replayable (`GetBody`). `Retry-After` (seconds or HTTP date) on 429/503 replaces the backoff; every wait is capped at `MaxWait`; waits use the injected `Clock`, and context cancellation aborts them. Backoff is `BaseDelay * 2^n` capped at `MaxDelay`, varied by plus or minus `Jitter`. A 401 triggers `Refresh` once and a resend (allowed for non-idempotent requests, since the server rejected it unprocessed); a second 401, a missing refresher, an exhausted budget or an unreplayable body gives `*AuthError`. A 403 gives `*ForbiddenError` with a vendor code (from headers via `VendorCode`, redacted, at most 64 bytes). Tracing is off by default; when on it writes one redacted line per attempt, never bodies, with the URL reduced to scheme, host and path.
 
@@ -178,7 +178,7 @@ User-supplied text is single-lined (descriptions, forbidden items) or placed in 
 
 | Package | Exported identifiers |
 |---|---|
-| `output` | `DefaultMaxBytes`; `ErrInvalidBounds`, `ErrOffsetOutOfRange`, `ErrBoundTooSmall`, `ErrUnknownFormat`; `Envelope` (+ `ExitCode`, `MarshalJSON`), `Success`, `Failure`, `FromError`; `Meta`, `Error`; `Category`, `Category*` constants, `Categories`, `CategoryOf`, `CategoryError`, `Hinter`; `ExitCode`, `Exit*` constants, `ExitFor`, `ExitOf`; `Format`, `Format*`, `ParseFormat`; `Bounds`, `Options`, `Write`, `Render`; `Untrusted` |
+| `output` | `DefaultMaxBytes`; `ErrInvalidBounds`, `ErrOffsetOutOfRange`, `ErrBoundTooSmall`, `ErrUnknownFormat`; `Envelope` (+ `ExitCode`, `MarshalJSON`), `Success`, `Failure`, `FailureWithSecrets`, `FromError`, `FromErrorWithSecrets`; `Meta`, `Error`; `Category`, `Category*` constants, `Categories`, `CategoryOf`, `CategoryError`, `Hinter`; `ExitCode`, `Exit*` constants, `ExitFor`, `ExitOf`; `Format`, `Format*`, `ParseFormat`; `Bounds`, `Options`, `Write`, `Render`; `Untrusted` |
 | `auth` | `Token`, `NewToken`; `TokenSource`, `Refresher`, `DaemonClient`; `NewDaemonTokenSource`, `DaemonTokenSource`, `Option`, `WithRemediation`; `Authorizer`, `NewAuthorizer`; `ErrReauthRequired`, `ErrRevoked`, `ErrRefreshUnsupported`; `UnreachableError`, `ActionRequiredError`, `TokenError` |
 | `auth/authtest` | `Fake`, `New`, `Option`, `WithSocket`, `DefaultSocket`; `Scenario` with `Valid`, `ExpiredNeedsRefresh`, `ReauthRequired`, `Revoked`, `Unreachable`, `UnauthorizedThenSuccess`, `UnauthorizedTwice` |
 | `policy` | `Version`, `DefaultDenyID`; `Policy`, `Rule`, `Constraint`, `Rate`, `Limits`, `Effect`, `Mode` (+ constants); `Parse`, `Load`, `Option`, `WithWritable`, `WritableMode` (`WritableWarn`, `WritableRefuse`, `WritableIgnore`); `Request`, `Decision`, `DeniedError`, `Engine`, `NewEngine`, `Clock`; `InvalidError`, `WritableError` |

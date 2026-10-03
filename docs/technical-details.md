@@ -171,3 +171,77 @@ Package `docgen` renders a deterministic SKILL.md from a command tree. It import
 Always-included sections: `## Untrusted content` (the rule, plus the JSON and text marking built from `output.Untrusted`), `## Output envelope` (success and failure examples marshaled from `output.Success` and `output.Failure`), `## Exit codes` (one row per `output.Categories()` entry with `output.ExitFor`) and `## Shared conventions`. A test fails if `output` gains a category with no meaning text in `docgen`.
 
 User-supplied text is single-lined (descriptions, forbidden items) or placed in a code fence longer than any backtick run it contains (usage, examples), so it cannot inject headings or front matter. The golden file is `docgen/testdata/SKILL.golden.md`; refresh it with `go test ./docgen -update`.
+
+## Exported API summary
+
+`go doc -all ./<pkg>` is authoritative. Every exported identifier outside `internal/` is public API (API-2).
+
+| Package | Exported identifiers |
+|---|---|
+| `output` | `DefaultMaxBytes`; `ErrInvalidBounds`, `ErrOffsetOutOfRange`, `ErrBoundTooSmall`, `ErrUnknownFormat`; `Envelope` (+ `ExitCode`, `MarshalJSON`), `Success`, `Failure`, `FromError`; `Meta`, `Error`; `Category`, `Category*` constants, `Categories`, `CategoryOf`, `CategoryError`, `Hinter`; `ExitCode`, `Exit*` constants, `ExitFor`, `ExitOf`; `Format`, `Format*`, `ParseFormat`; `Bounds`, `Options`, `Write`, `Render`; `Untrusted` |
+| `auth` | `Token`, `NewToken`; `TokenSource`, `Refresher`, `DaemonClient`; `NewDaemonTokenSource`, `DaemonTokenSource`, `Option`, `WithRemediation`; `Authorizer`, `NewAuthorizer`; `ErrReauthRequired`, `ErrRevoked`, `ErrRefreshUnsupported`; `UnreachableError`, `ActionRequiredError`, `TokenError` |
+| `auth/authtest` | `Fake`, `New`, `Option`, `WithSocket`, `DefaultSocket`; `Scenario` with `Valid`, `ExpiredNeedsRefresh`, `ReauthRequired`, `Revoked`, `Unreachable`, `UnauthorizedThenSuccess`, `UnauthorizedTwice` |
+| `policy` | `Version`, `DefaultDenyID`; `Policy`, `Rule`, `Constraint`, `Rate`, `Limits`, `Effect`, `Mode` (+ constants); `Parse`, `Load`, `Option`, `WithWritable`, `WritableMode` (`WritableWarn`, `WritableRefuse`, `WritableIgnore`); `Request`, `Decision`, `DeniedError`, `Engine`, `NewEngine`, `Clock`; `InvalidError`, `WritableError` |
+| `audit` | `SchemaVersion`, `ErrNoPath`, `ErrWrite`; `Config`, `Open`, `NewLogger`, `Logger`, `Record`; `Option`, `WithClock`, `WithSecrets`, `WithFailureMode`, `WithOnWriteError`; `WriteFailureMode` (`Warn`, `Block`), `WriteError` |
+| `httpx` | `DefaultMaxRetries`, `DefaultBaseDelay`, `DefaultMaxDelay`, `DefaultMaxWait`, `DefaultJitter`; `Config`, `Clock`, `TokenRefresher`, `Transport`, `NewTransport`, `NewClient`; `MarkSafeToRetry`, `IsMarkedSafe`; `RateLimitedError`, `AuthError`, `ForbiddenError` |
+| `selftest` | `Outcome` (`Allow`, `Deny`), `Status` (`StatusPass`, `StatusFail`, `StatusSkip`), `Row`, `RowResult`, `Probe`, `Runner`, `Result` |
+| `docgen` | `SharedSkill`, `CommandTree`, `Command`, `Generate`, `Error` |
+
+Notes a consumer should know:
+
+- `httpx.Config.Redactor` and `audit.WithClock` mention types from `internal/`. Outside this module the `Redactor` field can only be left nil (a default is used), and `WithClock` accepts any value with `Now() time.Time`. `httpx.Clock` and `policy.Clock` are declared in their packages so consumers can name them.
+- The `policy` package does not import `output`; its errors carry no category and the caller maps them (denial to `policy_denied`, invalid policy to `validation`).
+
+## Versioning and API stability (PRD API-1..API-9)
+
+| ID | Policy | State in this repository |
+|---|---|---|
+| API-1 | Semantic versioning; git tag `vX.Y.Z` is the module version | No tag exists yet; first release planned as `0.1.0` |
+| API-2 | Everything exported outside `internal/` is public API | Enforced by layout; `internal/` holds `redact`, `clock`, `archtest`, `integration` |
+| API-3 | Pre-1.0: a breaking change bumps the minor version (`0.y.z` to `0.(y+1).0`), noted in release notes; `1.0.0` is an explicit decision | Policy only |
+| API-4 | After 1.0 a break needs a new major version | Policy only |
+| API-5 | Deprecate with `// Deprecated:` and a replacement, kept at least one minor release (proposed, unconfirmed) | Policy only |
+| API-6 | A major version 2 or higher needs a `/v2` module path and a migration of every consumer; avoided by a small surface and `internal/` | Policy only |
+| API-7 | CI compares the API against the previous release (`apidiff` or `gorelease`) | Documented, NOT wired: no previous release exists to compare with; tool choice and blocking-versus-advisory are undecided |
+| API-8 | Envelope, exit codes and audit schema are API contract, pinned by golden tests | Implemented: `output/testdata`, `audit/testdata/golden.jsonl`, `docgen/testdata`, `selftest/testdata` |
+| API-9 | A bad release is superseded, never deleted or re-tagged | Policy only; no release workflow yet |
+
+## Platform targets
+
+Supported: darwin/arm64, linux/amd64, linux/arm64, built with `CGO_ENABLED=0`. Native Windows is not a target; Windows users run the Linux build under WSL2, which is a Linux environment. The policy writable-file check uses a `unix` build-tagged implementation and finds nothing on other platforms. CI compiles and vets all three targets and runs the tests natively on Linux and on macOS arm64.
+
+## Build, test and CI
+
+- Gate: `gofmt -l .` empty, `go vet ./...`, `golangci-lint run`, `go test -race ./...`, `go mod tidy` leaves no diff, cross-compile for the three targets, `govulncheck`. `make check` runs the local part; `make cross`, `make vuln`, `make fuzz` and `make tidy-check` run the rest individually.
+- `.github/workflows/ci.yml` runs on pull requests and manual dispatch only, with read-only permissions and no secrets. There is no release, publish or deploy job.
+- Tests: golden files for the envelope, exit codes, audit schema, selftest output and generated skill document; `internal/archtest` (import graph, cycles, allowed third-party modules, no vendor names); `internal/integration` (end-to-end flow through `examples/sampletool`, and a fuzz/property test that no token value appears in any envelope, error, trace or audit line).
+- `examples/sampletool` is a vendor-neutral sample tool showing the order policy, auth, httpx, output, audit. It is documentation that compiles and is tested, not API.
+
+## Assumptions and deferred work
+
+Assumptions the PRD marks unconfirmed or proposed, and how the code treats them:
+
+| Item | PRD status | Treatment |
+|---|---|---|
+| Go surface of the daemon's `pkg/client` (types, how `reauth_required` is signalled) | unconfirmed | `auth` defines `DaemonClient`; a future adapter maps whatever the real client does |
+| 401 scenarios match the daemon's refresh semantics | unverified | `authtest` models them; not checked against a real daemon |
+| Common policy schema across `snow`, `outlook`, `teams` | assumed possible, unverified | Generic schema shipped, no tool-specific sample policies |
+| Audit write failure default "block write operations" | proposed | Mode is per Logger (`warn` default, `block`); the library cannot tell reads from writes, so a tool wanting the proposed default chooses per call |
+| Failing selftest exit code `1` | proposed | Implemented as exit 1 (`general`) |
+| Skill format required by each harness | unconfirmed | `docgen` emits one generic Markdown shape with `name` and `description` front matter |
+| Deprecation window of one minor release (API-5) | proposed | Policy text only |
+| `apidiff` / `gorelease` as the compatibility tool (API-7) | not verified | Not wired |
+| Local overhead under 50 ms | not measured | No benchmark |
+
+Deferred (not built), with rationale:
+
+| Item | Rationale |
+|---|---|
+| Human-mode login (browser PKCE, OS keychain) `TokenSource` | Decided to live in `snow-cli`; the `TokenSource` interface already allows it |
+| Adapter over `agent-okta-d` `pkg/client` | `pkg/client` has no tagged release and an unconfirmed Go surface; will be the only importer, implementing `auth.DaemonClient` |
+| Conformance test kit | Needs real consumers to define it; revisit after `0.1.0` is adopted |
+| `apidiff` / `gorelease` in CI | No earlier release to compare with; blocking-versus-advisory is undecided |
+| Release workflows: tagging, GitHub Release, SBOM, provenance, signing, downstream compatibility build | No consumer code and no tag exist; CI is verify-only |
+| Policy file signature check (CORE-POL-7, P2) | Lower priority |
+| Native Windows support | Out of scope; WSL2 uses the Linux build |
+| Pinning CI actions to commit SHAs | Needs network lookups; actions are pinned to release tags |

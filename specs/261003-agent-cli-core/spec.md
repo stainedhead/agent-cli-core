@@ -82,6 +82,35 @@ None (first release `0.1.0`). Pre-1.0: breaks bump minor.
 Quality gates for every workstream: `gofmt -l .` empty; `go vet ./...`; `golangci-lint run`; `go test -race ./...`; `go mod tidy` no diff; `GOOS/GOARCH` cross-build of `./...` for the three targets.
 Acceptance: PRD milestones M0..M4 plus a cross-package example in `examples/`; `docs/technical-details.md` documents each package's API; ADR records D4 and deferrals; golden tests pin envelope, exit codes, audit schema.
 
+## 9a. Numbered Acceptance Criteria (each testable; maps to FRs)
+- AC-1 (FR-001/007): success and error envelopes match golden files in json, table, text; message text vendor-neutral.
+- AC-2 (FR-002/007): constants 0..9 match the PRD table; every Category maps to exactly one code; unknown category maps to 1.
+- AC-3 (FR-003): a declared free-text field is emitted with `"untrusted": true` (JSON) or delimiters including author and timestamp (text); undeclared fields are untouched.
+- AC-4 (FR-004): output over 32768 bytes sets `meta.truncated` and `next_offset`; result is valid JSON and valid UTF-8 for inputs with multi-byte characters at the cut point.
+- AC-5 (FR-006/013, SEC-1): property/fuzz test finds no token value in any error, log, trace, audit line or envelope; `String`/`%v`/`%+v`/`%#v` on `auth.Token` print `[redacted]`.
+- AC-6 (FR-008/009): against `authtest.Fake`, valid/refresh/revoked/reauth_required/unreachable all behave as specified; unreachable names the socket and maps to exit 3; no fallback is attempted.
+- AC-7 (FR-010): 401 then success -> exactly one refresh and one retry; 401 twice -> exit 3 with no third request; total attempts never exceed the shared budget.
+- AC-8 (FR-011): 403 -> exit 4, vendor code reported, request body absent from error and trace.
+- AC-9 (FR-012): 429/503 with Retry-After (delta-seconds and HTTP-date) retried within MaxRetries and MaxWait on a fake clock, then exit 8; non-idempotent request is not retried unless marked safe; no real sleeping in tests.
+- AC-10 (FR-015/016): table-driven policy decisions; unknown YAML key, empty file, and invalid value all fail closed; write modes allow/dry_run_only/deny honored; decision carries rule id and reason.
+- AC-11 (FR-015): rate limits per hour/per run enforced on a fake clock, safe under concurrent `Check` calls (`-race`).
+- AC-12 (FR-018/019): audit golden JSONL; no secret or body fields; schema_version present; write failure is returned, and block-on-failure is configurable.
+- AC-13 (FR-020/021): selftest reports per-row pass/fail with fake probes; failing matrix -> exit 1; read-only mode skips non-read-only rows.
+- AC-14 (FR-022/023): generated SKILL.md is byte-identical across runs and map orderings, contains untrusted rule, envelope and exit codes; matches golden.
+- AC-15 (FR-025): archtest fails on an import cycle, a forbidden edge (e.g. `auth`->`httpx`) or a vendor name.
+- AC-16 (NFR): gofmt, vet, golangci-lint, `go test -race ./...`, tidy diff and three-target cross-build pass; every package has an `Example*` test; `docs/technical-details.md` covers every exported package.
+
+## 9b. Edge Cases and Error Paths
+- External/daemon failures: socket missing, permission denied, timeout, malformed daemon reply, context cancellation mid-request (all map to a Category; none leak a token or fall back to other credentials).
+- Concurrency: concurrent `Token` calls trigger a single in-flight refresh (single-flight); audit writes are serialized and each record is one atomic line; policy rate-limit counters are mutex-protected.
+- Empty/null inputs: nil/empty envelope data, nil command tree, empty policy file, zero-row selftest matrix, empty `Retry-After`, negative or huge `Retry-After` (clamped by MaxWait), non-UTF-8 input to truncation.
+- Permission boundaries: policy file writable by the agent user (warn or refuse, POSIX only); audit file unwritable; policy decisions never claim the server will allow the action.
+- Request bodies: replayability on retry (body must be re-readable via `GetBody`; otherwise treated as non-retryable).
+- Partial failures: audit write fails after the command succeeded (surface, do not hide the result).
+
+## 9c. Out of Scope (explicit)
+Vendor clients, CLI/binary, daemon, human-mode PKCE/keychain, `pkg/client` adapter, conformance kit (unless I.6 is small), apidiff enforcement, CD/release/SBOM/signing, downstream compatibility build, Windows, sample tool policies, policy signature check (CORE-POL-7), and the root-repo `skills/agent-cli-core.md` (maintained in `agentic-teams`; update is a manual PR, SKILL-4).
+
 ## 10. Risks and Mitigation
 | Risk | Mitigation |
 |---|---|
@@ -96,6 +125,18 @@ WS0 Foundation = M0 + M1; WS-A..F in parallel = M2..M4; WS-I integration = accep
 
 ## 12. Decisions on PRD open questions
 Q1 human mode: deferred, belongs in `snow-cli`. Q3/Q4: engine ships a generic schema, no tool sample policies; fixtures vendor-neutral. Q5: gates M0a only. Q6: deferred (stretch I6). Q11: documented only. CORE-AUTH-1b fake placement: `auth/authtest`. Redactor placement (PRD says "6.5 redactor", i.e. httpx): `internal/redact`, so `output` need not import `httpx`.
+
+## 12a. Open items with owners
+| Item | Owner | Resolution path |
+|---|---|---|
+| Q5 `pkg/client` tag / M0a adapter | agent-okta-d owner (TBD) | After a tagged release; separate spec |
+| Q6 conformance kit | Enterprise Architecture (TBD) | Decide after 0.1.0 consumers exist |
+| Q11 apidiff blocking vs advisory | Enterprise Architecture (TBD) | Decide before enforcing in CI |
+| SKILL-1 root skill update | agentic-teams maintainers | Manual PR per release |
+
+## 12b. Document-level notes
+- AGENTS.md said the PRD stays at the repo root; create-spec moves it into the spec directory. Links in README, INTENT, AGENTS and docs were updated to the new path.
+- DEP-1 forbids `replace` on main and no module in `go.mod` is ours today, so the dependency-token setup (DEP-2/3) is not needed until M0a.
 
 ## 13. References
 - Source PRD: `specs/261003-agent-cli-core/agent-cli-core-PRD.md`

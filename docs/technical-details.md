@@ -87,7 +87,7 @@ Golden files in `output/testdata` pin every format of success, error, untrusted,
 
 Package `auth` (`github.com/stainedhead/agent-cli-core/auth`) obtains short-lived bearer tokens. Imports: `output`, `internal/redact` only. It never imports `httpx` or the credential daemon's module.
 
-- `Token` - redacting value: `String`, `GoString`, `Format` (every fmt verb), `MarshalJSON`, `MarshalText` and `LogValue` all give `[redacted]`. `NewToken(string)` builds one, `IsZero()` tests it; there is no accessor. The value reaches the network only through `Authorizer.Authorize`.
+- `Token` - redacting value: `String`, `GoString`, `Format` (every fmt verb), `MarshalJSON`, `MarshalText` and `LogValue` all give `[redacted]`. `NewToken(string)` builds one, `IsZero()` tests it; there is no accessor. The value is held in a closure, so it also stays out of fmt output when a Token sits in an unexported struct field; in-process reflect/unsafe access and memory dumps remain out of scope. The value reaches the network only through `Authorizer.Authorize`.
 - `TokenSource` `{Token(ctx) (Token, error)}`; optional `Refresher` `{Refresh(ctx) (Token, error)}`.
 - `DaemonClient` `{Fetch(ctx, provider) (Token, error); Refresh(ctx, provider) (Token, error)}` - the adapter point.
 - `NewDaemonTokenSource(client, provider, ...Option) (*DaemonTokenSource, error)`: provider is required (no default), no caching, no fallback. `WithRemediation(text)` adds the tool's exact re-enrollment instruction.

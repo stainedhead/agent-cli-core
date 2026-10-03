@@ -16,7 +16,7 @@ Counts: P0 = 1, P1 = 1, P2 = 5.
 Evidence: `auth/source.go:113-128` (`Authorize` sets `Authorization` unconditionally) called per attempt from `httpx/transport.go:147-162` (`prepare`) and `httpx/transport.go:73`. `http.Client` strips `Authorization` on a cross-domain redirect, but it then calls `Transport.RoundTrip` for the new request, and `prepare` sets the header again. Reproduced: `httpx.NewClient` with `auth.NewAuthorizer`, first server 302-redirects to `http://localhost:<port>/x`; the second host received `Authorization: Bearer <token>`. `NewClient` (`httpx/transport.go:68`) installs no `CheckRedirect`. Also sends over plain `http://`.
 Why it matters: an upstream open redirect, or a malicious server, exfiltrates the token to an arbitrary host; this defeats the library's core guarantee (docs/product-details.md:34, auth/doc.go:15).
 Acceptance criteria:
-- Config gains an allowed-host list (or the Transport binds to the first request's host); `Authorize` is skipped, and the request fails with a typed error, for any other host.
+- Decision (resolves OQ-1): Config gains an `AllowedHosts` list, defaulting to the first request's host; `Authorize` is skipped, and the request fails with a typed error (category auth/forbidden-host), for any other host.
 - `NewClient` sets a `CheckRedirect` that refuses cross-host redirects (or drops auth) by default.
 - Plain `http` to a non-loopback host is refused unless explicitly enabled.
 - Tests: redirect to a different hostname never carries `Authorization`; same-host redirect still works.
@@ -39,7 +39,7 @@ Acceptance criteria:
 ### FR-4 (P2) Envelope failure path ignores registered secrets
 Evidence: `output/envelope.go:53-55` uses `redact.New()` with no secrets; `FromError` (`:62-71`) has no way to pass them, whereas `Write` accepts secrets (`output/write.go:139`). A literal secret that is not pattern-shaped (short or non-opaque, e.g. an API key like `abc-123-xyz`) in an error message is emitted by `FromError`.
 Acceptance criteria:
-- `FromError`/`Failure` have a variant or option accepting secrets (or docs direct callers to always go through `Write` and `Write` is verified to rescrub the error), with a test using a non-pattern literal secret in an error.
+- Decision: add `FromErrorWithSecrets`/`FailureWithSecrets` (additive, semver-safe) and verify `Write` rescrubs the error envelope; docs say to use them. Test: a non-pattern literal secret (`abc-123-xyz`) in an error message is absent from the output of both paths.
 
 ### FR-5 (P2) Redactor over-matches ordinary words
 Evidence: `internal/redact/redact.go:23` `reAuthScheme` matches any `bearer|basic` followed by a word. Reproduced: `"use basic authentication; bearer of news"` -> `"use [redacted]; [redacted] news"`. Also `reOpaque` (`:28`) redacts any 40+ char identifier (commit SHAs, long resource names), which corrupts audit `Resource` and error messages.
@@ -54,6 +54,28 @@ Acceptance criteria: hint lookup uses `errors.As(err, &Hinter)` semantics; test 
 ### FR-7 (P2) Policy engine hit history grows without bound
 Evidence: `policy/engine.go:77-80` appends to `e.hits[key]` on every allowed request for every limit, but `prune` runs only when `PerHour > 0` (`:69-70`). With no hourly limit (or per-run only) the slice grows for the life of the process; the global key is always appended.
 Acceptance criteria: record hits only for keys with `PerHour > 0`; test that `len(e.hits)` stays zero for a policy with only per-run limits, and that a long run with hourly limits stays bounded.
+
+## Non-functional requirements
+- Security: no token, registered secret or query secret appears in any error, envelope, trace or print path; verified by tests listed per FR.
+- Compatibility: changes are additive or default-tightening; any behavior change (FR-1 default redirect refusal, FR-5 matching) is noted in the changelog and the root skill `skills/agent-cli-core.md` per AGENTS.md.
+- Reliability/performance: FR-7 keeps engine memory bounded; no added per-request allocation beyond one host comparison (FR-1).
+- Quality gates: gofmt, go vet, golangci-lint, `go test -race` pass and per-package coverage stays >= 90%.
+- Observability: FR-1 denials surface as typed errors visible in the audit log and trace.
+
+## Dependencies
+Internal only: `auth`, `httpx`, `output`, `policy`, `internal/redact`. FR-1 and FR-3 both touch `httpx/transport.go`/`errors.go`; FR-3, FR-4, FR-5 all touch redaction. The root skill document (agentic-teams repo) needs an update for FR-1 and FR-4. No external services.
+
+## Open questions
+- OQ-1: Is the default host policy first-request-host (chosen) or an explicit required allow-list? Does `http` to loopback stay allowed for tests (assumed yes)?
+- OQ-2: Should git SHA-1 (40 hex) be preserved by `reOpaque` (FR-5), or raise the threshold to 41+?
+- OQ-3: Strip query from `url.Error` text always, or document only (FR-3)?
+
+## Implementation approach
+- Priorities: P0 = FR-1 is a true blocker (credential exfiltration in a credential-safety library); P1 = FR-2 (violates a stated guarantee, no remote trigger) should land in the same release; P2 items are non-blocking.
+- TDD: for each FR write the failing reproducing test first (the throwaway repro tests from the review are the starting point), make it pass, then refactor.
+- Code review per fix: every FR fix gets its own commit and a `dev-flow review-code` pass (or a teammate review) before it is merged into the feature branch.
+- Agent teammates: assign independent workstreams to separate agent teammates, and use a reviewer teammate distinct from the author.
+- Git worktrees: run parallel workstreams in separate git worktrees on short-lived branches off `feat/agent-cli-core`. Suggested streams: A = FR-1 (httpx/auth); B = FR-2 (auth/token.go; sequence after A since both touch auth); C = FR-3/FR-4/FR-5 (redaction and output; sequence FR-5 before FR-3/4 re-verification); D = FR-6/FR-7 (output hint, policy). Streams A and C both touch httpx/errors.go, so rebase before merging. Never push to main.
 
 ## Verified non-findings
 - Token JSON/text/slog/fmt on a bare value is redacted; audit fields are redacted, capped and JSON-escaped (no line injection); log file is 0600; writes are mutex-serialized.

@@ -76,7 +76,9 @@ func (e *Engine) Check(req Request) Decision {
 	}
 	for _, l := range limits {
 		e.perRun[l.key]++
-		e.hits[l.key] = append(e.hits[l.key], now)
+		if l.r.PerHour > 0 { // only hourly limits need a hit window
+			e.hits[l.key] = append(e.hits[l.key], now)
+		}
 	}
 	return d
 }

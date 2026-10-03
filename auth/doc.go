@@ -15,6 +15,13 @@
 // sets the Authorization header itself, so a token never leaves auth except
 // into that header. No exported function returns a token as text.
 //
+// # Redaction limits
+//
+// Token redacts under every fmt verb (including inside unexported fields),
+// JSON, text marshaling and log/slog. It cannot defend against code that uses
+// reflect or unsafe in-process, or against process memory dumps and core
+// files; the value lives in ordinary heap memory for the life of the Token.
+//
 // # Wiring
 //
 // A tool builds a DaemonClient, wraps it with NewDaemonTokenSource for one

@@ -13,7 +13,7 @@ authz := auth.NewAuthorizer(src)              // pass to the HTTP layer
 
 - The provider name is yours; the library has no default and no fallback credentials.
 - `authz` has `Authorize(ctx, *http.Request) error` and `Refresh(ctx) error`, the shape the `httpx` package expects, so it plugs in with no glue. `Authorize` sets the `Authorization` header itself; nothing in the library returns or prints a token, and there is no `print-token` helper.
-- `auth.Token` prints as `[redacted]` under `%v`, `%+v`, `%#v`, `%s`, JSON, text marshaling and `log/slog`.
+- `auth.Token` prints as `[redacted]` under `%v`, `%+v`, `%#v`, `%s`, JSON, text marshaling and `log/slog`, including when a Token sits in an unexported struct field. Limits: in-process `reflect`/`unsafe` access and memory dumps can still read the value.
 
 ## Errors and exit codes
 

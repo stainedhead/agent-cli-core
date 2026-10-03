@@ -27,3 +27,7 @@ Purpose: record decisions and surprises during implementation. Update after each
 - Write mode is a Logger setting (warn|block), not per-verb: the library has no read/write classification. Tools wanting the PRD's "block write operations" default use two Loggers or choose per call. Assumption.
 - Fields capped at 512 bytes and redacted so free text cannot smuggle bodies or tokens.
 - Existing log files wider than 0600 are chmod-ed to 0600 on Open.
+### httpx
+- Decisions: `httpx.Clock` is declared locally (structurally equal to `internal/clock.Clock`) so consumers can name the type; default is `clock.System`. `MaxRetries` is retries after the first attempt (0 means 3, negative means none). Retry-After waits are `min(Retry-After, MaxWait)` without jitter; backoff is jittered. Vendor code comes from response headers only via `Config.VendorCode`, so the body is never read. 401 refresh is allowed for non-idempotent requests if the body is replayable.
+- Assumption: persistent or non-retryable 429/502/503/504 and exhausted network errors become `*RateLimitedError` (exit 8), per the exit-code definition "rate limiting or transient failure persisted".
+- Deviation: none from the task list; 404/409/500 pass through as responses.

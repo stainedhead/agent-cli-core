@@ -17,8 +17,18 @@
 //
 // The signature is frozen: changing it is a breaking change.
 //
-// This package is a stub until its workstream lands; TokenRefresher is
-// declared below so consumers can already depend on it.
+// # Overview
+//
+// NewClient and NewTransport return an http.Client / http.RoundTripper that
+// retries transient failures (429, 502, 503, 504, network errors) with
+// jittered exponential backoff, honors Retry-After for 429 and 503 up to
+// Config.MaxWait, retries only idempotent requests or those marked with
+// MarkSafeToRetry (replaying bodies through GetBody), performs one token
+// refresh and resend on 401 from the same attempt budget, and converts
+// terminal failures into typed errors that map to exit codes through
+// output.CategoryError: *RateLimitedError (8), *AuthError (3) and
+// *ForbiddenError (4). Error values never contain response bodies. Tracing
+// is off unless Config.Trace is set and is always redacted.
 package httpx
 
 import (

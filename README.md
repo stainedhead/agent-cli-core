@@ -80,7 +80,7 @@ For contributors:
 - [INTENT.md](INTENT.md) - why this library exists and where it fits
 - [AGENTS.md](AGENTS.md) - contributor and agent rules
 - [docs/](docs/) - [product summary](docs/product-summary.md), [product details](docs/product-details.md), [technical details](docs/technical-details.md), [architectural decision record](docs/architectural-decision-record.md)
-- [specs/261003-agent-cli-core/](specs/261003-agent-cli-core/) - the PRD and feature spec
+- [specs/archive/261003-agent-cli-core/](specs/archive/261003-agent-cli-core/) - the PRD and feature spec
 
 ## Related repositories
 

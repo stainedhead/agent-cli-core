@@ -1,7 +1,7 @@
 # Dev-Flow Implementation Status
 
 **PRD:** agent-cli-core-PRD.md
-**Spec:** specs/261003-agent-cli-core
+**Spec:** specs/archive/261003-agent-cli-core
 **Branch:** feat/agent-cli-core
 **Review PRD:** agent-cli-core-auto-review-PRD.md
 **Process Start:** 2026-10-03T00:00:00Z

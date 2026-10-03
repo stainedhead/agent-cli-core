@@ -1,6 +1,6 @@
 # agent-cli-core Automated Code Review (Step 5)
 
-Branch: feat/agent-cli-core vs main. Reviewer: dev-flow review-code. Spec: specs/261003-agent-cli-core.
+Branch: feat/agent-cli-core vs main. Reviewer: dev-flow review-code. Spec: specs/archive/261003-agent-cli-core.
 
 ## Executive summary
 

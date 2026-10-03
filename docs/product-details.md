@@ -1,6 +1,6 @@
 # Product details
 
-Behavior of the library as built. Requirement identifiers (`CORE-*`, `API-*`) refer to the product requirements document in `specs/`.
+Behavior of the library as built. Requirement identifiers (`CORE-*`, `API-*`) refer to the product requirements document in `specs/archive/`.
 
 ## Dependency direction
 

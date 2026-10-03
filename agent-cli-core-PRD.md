@@ -16,7 +16,7 @@
 
 `agent-cli-core` is the shared Go library from which the agent-facing CLIs `snow`, `outlook` and `teams` are built. It holds the behavior that must be identical across those tools so each tool stays a thin layer of vendor-specific commands:
 
-1. **Token from the daemon.** A `TokenSource` abstraction whose agent implementation wraps `pkg/client` from `agent-okta-d`, with one forced refresh and retry on `401`, and a clear failure when the daemon reports `reauth_required`.
+1. **Token from the daemon.** A `TokenSource` abstraction whose agent implementation uses a small `DaemonClient` interface defined here (a thin adapter over `agent-okta-d` `pkg/client` comes later, D4), with one forced refresh and retry on `401`, and a clear failure when the daemon reports `reauth_required`.
 2. **One envelope, stable exit codes, untrusted-content marking, bounded output.** So an LLM harness sees the same shapes from every tool.
 3. **Client-side policy, audit log, HTTP retry/redaction, a self-test runner and skill-document generation.**
 
@@ -31,7 +31,7 @@ Nothing is implemented and nothing is released. This PRD was seeded from `snow-c
 | D1 | The shared CLI core is **its own repository**, `agent-cli-core`, not a directory inside `snow-cli`. | User decision, 2026-10-03; supersedes the "open question" in `snow-cli-PRD.md` §5 and §15.3 |
 | D2 | It is a **Go library**: no `main` package, no binary, no container image. | Same |
 | D3 | `snow`, `outlook` and `teams` stay **separate binaries** (so harness allow-lists and permission prompts can key on command name), each in its own repository, each importing this module. | `snow-cli-PRD.md` §5 |
-| D4 | Its `auth` package **wraps `pkg/client`** from `agent-okta-d` (module `github.com/stainedhead/agent-okta-d`). | `agent-okta-d-PRD.md` §9 |
+| D4 | Its `auth` package defines **its own small `DaemonClient` / `TokenSource` interface** (fetch a token for a named provider, force a refresh, signal `reauth_required` / revoked, and map an unreachable daemon to a clear error that becomes exit code `3`, CORE-AUTH-3), with a **fake implementation for tests**. `agent-okta-d` is **not imported in `go.mod`** (it has no tagged release yet). A thin adapter over `agent-okta-d` `pkg/client` (module `github.com/stainedhead/agent-okta-d`) is added later, once a tagged release exists. | User decision, 2026-10-03; supersedes the earlier "wrap `pkg/client` directly" wording based on `agent-okta-d-PRD.md` §9 |
 | D5 | It contains **no vendor clients**: nothing that knows ServiceNow, Graph or Teams. | This PRD (§5.2) |
 
 Where the sibling PRDs still describe the core's location as open, this decision supersedes them; updating those documents is tracked in §13.
@@ -60,7 +60,7 @@ Where the sibling PRDs still describe the core's location as open, this decision
 ```
 agent-okta-d  (pkg/client)
       ^
-      |  imports
+      |  imports  (LATER, via a thin adapter; not in go.mod today, D4)
 agent-cli-core  (auth, policy, output, audit, httpx, selftest, docgen)
       ^
       |  imports
@@ -70,14 +70,14 @@ snow-cli  ·  outlook-cli  ·  teams-cli   (binaries: snow, outlook, teams)
 | Module | Role | Depends on |
 |---|---|---|
 | `github.com/stainedhead/agent-okta-d` | Credential daemon; `pkg/client` is its Go client for the unix-socket API | (none of ours) |
-| `github.com/stainedhead/agent-cli-core` | This library | `agent-okta-d` (`pkg/client` only) |
+| `github.com/stainedhead/agent-cli-core` | This library | Nothing of ours today (D4). Later: `agent-okta-d` (`pkg/client` only), inside a thin adapter |
 | `snow-cli`, `outlook-cli`, `teams-cli` | Binaries `snow`, `outlook`, `teams` | `agent-cli-core`; vendor clients of their own |
 
 Rules:
 
 - Dependencies point one way. `agent-okta-d` never imports `agent-cli-core`; the core never imports a CLI repository.
 - The CLIs reach `pkg/client` **through** the core (`agent-okta-d-PRD.md` §9 describes `pkg/client` as consumed by the core's `auth` package). A CLI should not need to import `pkg/client` directly for the agent-mode path.
-- **Dependency not yet satisfiable.** No release of any repository exists. `agent-okta-d` must publish a tagged release containing `pkg/client` (its PRD §17.5 expects even a `0.1.0` containing only `pkg/client`) before this module can compile against it. Recorded as open item Q5 and milestone M0.
+- **Decoupled from the upstream release (D4).** No release of any repository exists, so this module does **not** import `agent-okta-d`. `auth` owns its own `DaemonClient`/`TokenSource` interface and a test fake, so M1-M5 can proceed without it. The adapter over `pkg/client` is added once `agent-okta-d` publishes a tagged release containing `pkg/client` (its PRD §17.5 expects even a `0.1.0` containing only `pkg/client`); the adapter is then the only importer of `pkg/client` and must be addable without a breaking change to `auth`'s public API. Recorded as open item Q5 and milestone M0a.
 
 ## 5. Architecture
 
@@ -87,7 +87,7 @@ Public packages are top-level; anything not meant for consumers is under `intern
 
 ```
 agent-cli-core/
-├─ auth/        TokenSource interface; daemon-backed implementation wrapping agent-okta-d pkg/client
+├─ auth/        TokenSource and DaemonClient interfaces, a test fake; (later) thin adapter over agent-okta-d pkg/client
 ├─ policy/      YAML policy engine (generic: verbs, resources, fields, limits, write modes)
 ├─ output/      envelope, truncation, untrusted-content marking, exit codes
 ├─ audit/       JSONL audit log
@@ -99,7 +99,7 @@ agent-cli-core/
 
 ### 5.2 Dependency rule
 
-The core knows nothing of ServiceNow, Microsoft Graph or Teams. Vendor behavior enters only through interfaces the core defines and the tool implements (for example, a `TokenSource` for a non-daemon source, a policy "resource" and "verb" vocabulary, a self-test matrix, a command-tree description for `docgen`). The core's only external service dependency is the daemon, through `pkg/client`. A review check: no import path in this module contains a vendor name, and no identifier encodes a vendor concept.
+The core knows nothing of ServiceNow, Microsoft Graph or Teams. Vendor behavior enters only through interfaces the core defines and the tool implements (for example, a `TokenSource` for a non-daemon source, a policy "resource" and "verb" vocabulary, a self-test matrix, a command-tree description for `docgen`). The core's only external service dependency is the daemon, reached through the `DaemonClient` interface it defines (later backed by a thin adapter over `pkg/client`, D4). A review check: no import path in this module contains a vendor name, and no identifier encodes a vendor concept.
 
 ### 5.3 Typical use in a tool
 
@@ -121,7 +121,9 @@ Origin: `snow-cli-PRD.md` §5 and AUTH-A1..A3; `outlook-cli-PRD.md` AUTH-1..4; `
 | ID | Requirement | Pri |
 |---|---|---|
 | CORE-AUTH-1 | Define a `TokenSource` interface so a tool can obtain a bearer token without knowing where it comes from. | P0 |
-| CORE-AUTH-2 | Provide the daemon-backed `TokenSource`, wrapping `pkg/client`, parameterised by provider name (the tool supplies it, for example `servicenow` or `msgraph`). The core hard-codes no provider name. | P0 |
+| CORE-AUTH-1a | Define a small `DaemonClient` interface (D4) with: fetch a token for a named provider; force a refresh for a provider; and typed errors for `reauth_required`, revoked, and daemon unreachable. The unreachable error carries the socket path tried so CORE-AUTH-3 can name it. The interface is defined in `auth`; `agent-okta-d` is not imported. | P0 |
+| CORE-AUTH-1b | Ship a **fake `DaemonClient`** (in `auth` or an `authtest` subpackage; placement is a spec decision) that can simulate valid token, expired token needing refresh, `reauth_required`, revoked, unreachable, and `401`-then-success. All `auth` tests use it. | P0 |
+| CORE-AUTH-2 | Provide the daemon-backed `TokenSource` built on the `DaemonClient` interface (CORE-AUTH-1a), parameterised by provider name (the tool supplies it, for example `servicenow` or `msgraph`). The core hard-codes no provider name. | P0 |
 | CORE-AUTH-3 | No fallback credentials: if the daemon socket is unreachable the operation fails and nothing else is tried. The CLI exits with code `3` and a clear, actionable message that the daemon could not be reached; the message names the socket that was tried and says the `agent-okta-d` service may not be running. Decided: exit code `3` is approved (the sibling PRDs say "refuse to run" without naming a code). | P0 |
 | CORE-AUTH-4 | On HTTP `401` from the vendor, force exactly one daemon refresh (the daemon exposes `POST /v1/credentials/{provider}/refresh`, `agent-okta-d-PRD.md` §11) and retry the request once. A second `401` exits `3`. | P0 |
 | CORE-AUTH-5 | If the daemon reports `reauth_required`, exit `3` with a message that a human action is needed. The core supplies the generic message; the tool supplies the exact remediation command (for example, outlook/teams: a human runs `agent-okta-d enroll msgraph`). | P0 |
@@ -129,7 +131,7 @@ Origin: `snow-cli-PRD.md` §5 and AUTH-A1..A3; `outlook-cli-PRD.md` AUTH-1..4; `
 | CORE-AUTH-7 | Handled with `httpx` (6.5): `429` and `503` with `Retry-After` are retried a bounded number of times, then exit `8`. | P0 |
 | CORE-AUTH-8 | Never print, log, trace, put in an error string, or expose in `ps` or child-process environment any token. Token values use a redacting type whose `String()` returns `[redacted]`. | P0 |
 | CORE-AUTH-9 | No exported function returns or prints a token to a user-facing surface, and the core provides no `token`/`print-token` helper. | P0 |
-| CORE-AUTH-10 | The exact surface of `pkg/client` (types, errors, how `reauth_required` is signalled) is not specified in `agent-okta-d-PRD.md`; `auth` adapts to it behind its own interface so a change in `pkg/client` is absorbed in one place. ⚠️ | P0 |
+| CORE-AUTH-10 | The exact surface of `pkg/client` (types, errors, how `reauth_required` is signalled) is not specified in `agent-okta-d-PRD.md` ⚠️. Because `auth` defines its own interface (D4, CORE-AUTH-1a), a later adapter over `pkg/client` absorbs any difference in one place. The adapter is a follow-up, not part of the first release unless Q5 is resolved earlier. | P1 |
 | CORE-AUTH-11 | Human-mode token sources (Okta PKCE login, OS keychain) are **not** in this package unless Q1 decides otherwise. The interface must allow a tool to supply its own `TokenSource` implementation. | P1 |
 
 ### 6.2 `policy`
@@ -263,7 +265,7 @@ Tests follow TDD (failing test first). PR CI uses no credentials and no network 
 
 | Area | Approach |
 |---|---|
-| `auth` | A **fake daemon** (a unix-socket HTTP server speaking the `agent-okta-d` local API: `GET /v1/credentials/{provider}`, `POST /v1/credentials/{provider}/refresh`) covering: valid token, expired token needing refresh, `reauth_required`, socket missing, `401` then success after refresh, `401` twice. |
+| `auth` | The **fake `DaemonClient`** (CORE-AUTH-1b) covering: valid token, expired token needing refresh, `reauth_required`, revoked, daemon unreachable (maps to exit `3` naming the socket), `401` then success after refresh, `401` twice. When the `pkg/client` adapter is added, a **fake daemon** (a unix-socket HTTP server speaking the `agent-okta-d` local API: `GET /v1/credentials/{provider}`, `POST /v1/credentials/{provider}/refresh`) is added to test the adapter. |
 | `httpx` | Fake HTTP server and fake clock: `429`/`503` with `Retry-After`, jitter bounds, retry limits, non-idempotent requests not retried, redaction in traces. |
 | `output` | **Golden tests** for the success and error envelopes in each format, for truncation (`meta.truncated`, `next_offset`), for untrusted-content marking in JSON and text, and for every exit code `0`..`9` and its category mapping. |
 | `policy` | Table-driven decisions; strict-parse failures; fail-closed on invalid policy; rate-limit windows with a fake clock. |
@@ -285,13 +287,13 @@ Tests follow TDD (failing test first). PR CI uses no credentials and no network 
 | SEC-5 | The policy engine fails closed on invalid input and is documented as a guardrail, not the control (CORE-POL-8/9). Server-side permissions remain the boundary. |
 | SEC-6 | The audit log contains no secrets and, by default, no free-text bodies (CORE-AUD-2). |
 | SEC-7 | Supply chain: dependencies at released semver tags (DEP-1), `govulncheck` and a pinned linter in CI, pinned actions, signed and attested releases (§14). |
-| SEC-8 | The library never reads the daemon's key material or any secret store; it speaks only to the daemon's unix socket through `pkg/client`. Peer-credential authentication is the daemon's job (`agent-okta-d-PRD.md` §11). |
+| SEC-8 | The library never reads the daemon's key material or any secret store; it speaks only to the daemon's unix socket, through the `DaemonClient` interface (later the `pkg/client` adapter). Peer-credential authentication is the daemon's job (`agent-okta-d-PRD.md` §11). |
 | SEC-9 | No credentials, real tenant identifiers or real instance names in tests, fixtures or examples. |
 
 ## 10. Non-functional requirements
 
-- **Stack:** Go, standard library plus a small set of dependencies (the YAML parser and `pkg/client` are the expected ones). The `go` directive follows the sibling repositories (`go 1.27`).
-- **Platforms:** must compile for `darwin/arm64`, `linux/amd64`, `linux/arm64`. Native Windows is not a target: Windows users run the Linux build under WSL2 (decided).
+- **Stack:** Go, standard library plus a small set of dependencies (the YAML parser is the expected one; `pkg/client` joins later with the adapter, D4). The `go` directive follows the sibling repositories (`go 1.27`).
+- **Platforms (targets):** must compile for `darwin/arm64`, `linux/amd64`, `linux/arm64`. Native Windows is not a target: Windows users run the Linux build under WSL2 (decided).
 - **Overhead:** the library adds little latency compared with the vendor round trip; `snow-cli-PRD.md` §11 sets "local overhead < 50 ms" for the tool, which the core must not consume on its own ⚠️ (not measured).
 - **No `init()` side effects, no global mutable state, no network at import time;** everything is constructed explicitly so tests can inject fakes.
 - **Dependency footprint** kept small and reviewed, because every consumer inherits it.
@@ -303,9 +305,10 @@ All milestones are proposed and unscheduled.
 
 | Milestone | Scope | Acceptance |
 |---|---|---|
-| **M0 Prerequisites** | `agent-okta-d` publishes a tagged release containing `pkg/client`; confirm its surface; settle Q1-Q5 enough to start; CI (§14.1) in place | `go get github.com/stainedhead/agent-okta-d@<tag>` resolves; CI green on an empty module |
+| **M0 Prerequisites** | Settle Q1-Q4 enough to start; CI (§14.1) in place. No dependency on `agent-okta-d` (D4) | CI green on an empty module for darwin/arm64, linux/amd64, linux/arm64 |
+| **M0a Daemon adapter (deferred)** | After `agent-okta-d` tags a release containing `pkg/client`: confirm its surface, add the thin adapter implementing `DaemonClient`, add it to `go.mod` at that tag | `go get github.com/stainedhead/agent-okta-d@<tag>` resolves; adapter passes the `DaemonClient` contract tests against a fake daemon; not a gate for `0.1.0` unless Q5 says otherwise |
 | **M1 Output contract** | `output` (envelope, exit codes, untrusted marking, bounds); golden tests | Golden tests pass; contract documented in `user-docs/` |
-| **M2 Auth + httpx** | `auth` (daemon-backed), `httpx`, fake daemon and fake clock tests | `401`-refresh-retry, `reauth_required`, `403`, `429`/`503` behaviors proven against fakes; no-token-in-logs test passes |
+| **M2 Auth + httpx** | `auth` (`DaemonClient` interface, fake, daemon-backed `TokenSource`), `httpx`, fake client and fake clock tests | `401`-refresh-retry, `reauth_required`, `403`, `429`/`503` behaviors proven against fakes; no-token-in-logs test passes |
 | **M3 Policy + audit** | `policy`, `audit` | Policy decisions and audit records pass table and golden tests; fail-closed proven |
 | **M4 selftest + docgen** | `selftest`, `docgen` | A sample tool in the tests generates a deterministic `SKILL.md` and runs a fake matrix |
 | **M5 First release `0.1.0`** | CD (§14.2), first tag, downstream compatibility build in CI | Release published with checksum, SBOM and attestation; `snow-cli`, `outlook-cli`, `teams-cli` build against it |
@@ -316,8 +319,8 @@ The release pipeline (§14.2) is in place before the first tag. CI (§14.1) is i
 
 ## 12. Concerns and recommendations
 
-1. **Upstream is not released.** The module cannot compile until `agent-okta-d` tags a release containing `pkg/client`. *Recommendation:* make that tag the first action of M0 and record it in both repositories.
-2. **Unknown `pkg/client` surface.** The daemon PRD names the package and the HTTP endpoints but not the Go API ⚠️. *Recommendation:* review `pkg/client` when it exists and keep `auth` as the only importer inside this module (CORE-AUTH-10).
+1. **Upstream is not released.** Mitigated by D4: `auth` defines its own interface and does not import `agent-okta-d`. *Recommendation:* add the thin adapter (M0a) when `agent-okta-d` tags a release containing `pkg/client`; record it in both repositories.
+2. **Unknown `pkg/client` surface.** The daemon PRD names the package and the HTTP endpoints but not the Go API ⚠️. *Recommendation:* review `pkg/client` when it exists and keep the adapter as the only importer of `pkg/client` inside this module (CORE-AUTH-10).
 3. **Scope creep into a framework.** A "core" library tends to absorb vendor logic. *Recommendation:* enforce the dependency rule (§5.2) in review and by test, and keep vendor behavior in the tool repositories.
 4. **One library, three consumers: coupling.** A breaking change forces three upgrades. *Recommendation:* small public surface, `internal/` by default, pre-1.0 minor bumps for breaks, the downstream compatibility build (§14.1) and possibly a conformance kit.
 5. **Guardrail mistaken for control.** *Recommendation:* the policy documentation and generated skill document state that server-side permissions are the boundary (CORE-POL-9).
@@ -331,7 +334,7 @@ The release pipeline (§14.2) is in place before the first tag. CI (§14.1) is i
 2. **Resolved: native Windows is not required.** The library does not need to compile for `windows/amd64`; Windows users run the Linux build under WSL2. CI compiles darwin/arm64, linux/amd64 and linux/arm64.
 3. **Who owns the policy schema?** A common schema in this library, or per-tool schemas that the engine merely evaluates? `snow` (§9), `outlook` (§9) and `teams` (§7) each define their own policy shape today; a shared vocabulary is assumed possible ⚠️. Ownership also decides who approves schema changes.
 4. **Library or tool: which package ships sample policy files?** The `snow` PRD ships sample `agent` and `human` policies with the binary (§15.5). This library should presumably ship none.
-5. **`pkg/client` tag.** What is the first released version of `agent-okta-d` containing `pkg/client`, and when? Blocks M0. Related: should `pkg/client` instead be its own tiny module so the core does not pull in the daemon's dependencies ⚠️ (not raised in the daemon PRD; the daemon PRD places it in the same module).
+5. **`pkg/client` tag.** What is the first released version of `agent-okta-d` containing `pkg/client`, and when? No longer blocks M0 (D4); it gates only M0a, the thin adapter. Related: should `pkg/client` instead be its own tiny module so the core does not pull in the daemon's dependencies ⚠️ (not raised in the daemon PRD; the daemon PRD places it in the same module).
 6. **Conformance test kit.** Build one that each CLI runs? Where does it live (this module, or a sub-module so it does not burden consumers)? Who maintains the golden data?
 7. **Release-notes policy for pre-1.0 breaks:** is a minor-bump-per-break (API-3) acceptable to the three tool teams?
 8. **Updating sibling PRDs and docs** (`snow-cli`, `outlook-cli`, `teams-cli`, `agent-okta-d` AGENTS/README/PRD) to record that the core is its own repository.
@@ -380,7 +383,7 @@ Applies to this repository. It is a **library**: there are no binaries and no co
 
 | ID | Requirement |
 |---|---|
-| DEP-1 | Consumers (and this repository, for `agent-okta-d`) declare dependencies in `go.mod` **at a released semver tag**. No pseudo-versions and no `replace` directives on `main`. The CI-only `replace` of BLD-7 exists only inside a CI job and is never committed. |
+| DEP-1 | Consumers (and this repository, once the adapter for `agent-okta-d` is added) declare dependencies in `go.mod` **at a released semver tag**. No pseudo-versions and no `replace` directives on `main`. The CI-only `replace` of BLD-7 exists only inside a CI job and is never committed. |
 | DEP-2 | Every workflow job that builds or tests resolves dependencies using the job's **dynamic `GITHUB_TOKEN`** (no personal access token, no stored secret), with `permissions: contents: read` and `packages: read`. |
 | DEP-3 | Setup step before `go mod download`: set `GOPRIVATE=github.com/stainedhead/*` and configure git `url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"` from the job token. The token is never echoed, and never written to caches or artifacts. |
 | DEP-4 | The repositories are **public today**, so the token is not strictly needed. The step is standard so behavior is identical if visibility changes. |
@@ -391,7 +394,7 @@ Applies to this repository. It is a **library**: there are no binaries and no co
 - **Release contents:** source archive, checksum, SBOM, attestation, signature, and release notes. Nothing else.
 - **Not released from this repo:** any binary, any container image, any vendor client, any sample policy for a specific tool.
 - **No secrets** in the pipeline other than the job token: no Okta, vendor or signing key material is needed (signing is keyless, ⚠️).
-- **Upstream dependency:** CI and CD cannot pass until `agent-okta-d` has a tagged release containing `pkg/client` and this module requires it (M0).
+- **Upstream dependency:** none today (D4). CI and CD do not depend on `agent-okta-d`. Once the adapter is added (M0a), the module requires a tagged `agent-okta-d` release (DEP-1).
 
 ### 14.5 Milestone placement
 
@@ -433,5 +436,5 @@ Agents that adopt this tool need to know how to use it. That knowledge is a **sk
 
 - `snow-cli-PRD.md` §5 (shared core, envelope, exit codes, untrusted content, output bounds), §9, §10, §11, §15.
 - `outlook-cli-PRD.md` §7 (AUTH-1..4), `teams-cli-PRD.md` §5 and §6.
-- `agent-okta-d-PRD.md` §9 (`pkg/client`), §11 (daemon socket API), §17.5 (importable `pkg/client`).
+- `agent-okta-d-PRD.md` §9 (`pkg/client`, for the later adapter), §11 (daemon socket API), §17.5 (importable `pkg/client`).
 - Go module and versioning behavior (semver tags, `internal/`, `/v2` module paths) is stated from general knowledge of the Go toolchain and was not re-checked against documentation in this session.

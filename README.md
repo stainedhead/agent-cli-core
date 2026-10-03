@@ -43,7 +43,7 @@ Once a release exists, a CLI declares the dependency in `go.mod` at a released s
 ## Documentation
 
 - [INTENT.md](INTENT.md) - why this library exists and where it fits in the set
-- [agent-cli-core-PRD.md](agent-cli-core-PRD.md) - the product requirements document
+- [agent-cli-core-PRD.md](specs/261003-agent-cli-core/agent-cli-core-PRD.md) - the product requirements document
 - [AGENTS.md](AGENTS.md) - contributor and agent rules
 - [docs/](docs/) - product and technical docs, ADRs
 - [user-docs/](user-docs/) - guides for developers who consume the library (none yet)

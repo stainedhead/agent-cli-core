@@ -1,7 +1,7 @@
 # Dev-Flow Implementation Status
 
 **PRD:** agent-cli-core-PRD.md
-**Spec:** (set after Step 1)
+**Spec:** specs/261003-agent-cli-core
 **Branch:** feat/agent-cli-core
 **Review PRD:** agent-cli-core-auto-review-PRD.md
 **Process Start:** 2026-10-03T00:00:00Z
@@ -12,9 +12,9 @@
 
 | Step | Name | Status | Start | End | Runtime (min) |
 |------|------|--------|-------|-----|---------------|
-| 0  | Optional PRD validation (review-prd) | 🔄 In Progress | — | — | — |
-| 1  | Create Spec from PRD            | ⬜ Pending | — | — | — |
-| 2  | Review Spec                     | ⬜ Pending | — | — | — |
+| 0  | Optional PRD validation (review-prd) | ✅ Complete (Minor gaps, no blockers) | — | — | — |
+| 1  | Create Spec from PRD            | ✅ Complete | 2026-10-03T20:27:26Z | 2026-10-03T20:30:08Z | 3 |
+| 2  | Review Spec                     | 🔄 In Progress | 2026-10-03T20:30:08Z | — | — |
 | 3  | Implement Product               | ⬜ Pending | — | — | — |
 | 4  | Documentation and User Docs     | ⬜ Pending | — | — | — |
 | 5  | Code and Design Review          | ⬜ Pending | — | — | — |

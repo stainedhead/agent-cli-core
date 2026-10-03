@@ -69,7 +69,7 @@ assumptions to validate, not facts.
 
 ## How this file is used
 INTENT.md captures *why* this library exists and where it sits in the set. The *how* lives in
-[agent-cli-core-PRD.md](agent-cli-core-PRD.md), and contributor rules in [AGENTS.md](AGENTS.md).
+[agent-cli-core-PRD.md](specs/261003-agent-cli-core/agent-cli-core-PRD.md), and contributor rules in [AGENTS.md](AGENTS.md).
 Update this file when goals, direction or scope shift, or when the set around it changes, not when
 implementation details change. The PRD's evidence markers are authoritative; this file does not
 upgrade any of them.

@@ -6,7 +6,7 @@ Rules for AI agents and human contributors working in this repository.
 
 `agent-cli-core` is a planned Go library (module `github.com/stainedhead/agent-cli-core`, no binary) holding the behavior shared by the agent-facing CLIs `snow`, `outlook` and `teams`: token acquisition from the `agent-okta-d` daemon (`auth`, wrapping the daemon's `pkg/client`), client-side policy (`policy`), the response envelope, exit codes and untrusted-content marking (`output`), the audit log (`audit`), HTTP retry and redaction (`httpx`), a self-test runner (`selftest`) and harness skill-document generation (`docgen`). It contains no vendor clients: it knows nothing of ServiceNow, Microsoft Graph or Teams.
 
-Status: Draft PRD, no implementation yet, no release. The PRD is [agent-cli-core-PRD.md](agent-cli-core-PRD.md); keep it at the repo root. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
+Status: Draft PRD, no implementation yet, no release. The PRD is [agent-cli-core-PRD.md](specs/261003-agent-cli-core/agent-cli-core-PRD.md); it lives in the spec directory (specs/261003-agent-cli-core/). Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
 
 Dependency chain: `agent-okta-d` (`pkg/client`) <- `agent-cli-core` <- `snow-cli`, `outlook-cli`, `teams-cli`. `agent-okta-d` must publish a tagged release containing `pkg/client` before this module can compile against it (see PRD sections 4 and 13).
 
@@ -15,7 +15,7 @@ Dependency chain: `agent-okta-d` (`pkg/client`) <- `agent-cli-core` <- `snow-cli
 Doc routing: a shift in goal, direction or scope goes in [INTENT.md](INTENT.md) (why and where the library fits); requirements go in the PRD; contributor rules go here.
 
 - `INTENT.md` - purpose, wider context, goals, non-goals, scope boundary
-- `agent-cli-core-PRD.md` - product requirements (the how)
+- `specs/261003-agent-cli-core/agent-cli-core-PRD.md` - product requirements (the how)
 
 Planned Go layout (PRD section 5; create directories only when code needs them). Public API lives in top-level packages; anything not meant for consumers goes under `internal/`.
 

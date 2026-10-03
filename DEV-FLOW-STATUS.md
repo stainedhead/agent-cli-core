@@ -19,8 +19,8 @@
 | 4 | Documentation and User Docs | ✅ Complete | 2026-10-03T20:53:37Z | 2026-10-03T20:59:39Z | 6 |
 | 5 | Code and Design Review | ✅ Complete | 2026-10-03T20:59:39Z | 2026-10-03T21:01:49Z | 2 |
 | 6 | Prepare Review PRD | ✅ Complete | 2026-10-03T21:01:49Z | 2026-10-03T21:02:38Z | 1 |
-| 7 | Archive Original Spec | 🔄 In Progress | 2026-10-03T21:02:38Z | — | — |
-| 8  | Spec Review Fixes               | ⬜ Pending | — | — | — |
+| 7 | Archive Original Spec | ✅ Complete | 2026-10-03T21:02:38Z | 2026-10-03T21:03:24Z | 1 |
+| 8 | Spec Review Fixes | 🔄 In Progress | 2026-10-03T21:03:24Z | — | — |
 | 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
 | 10 | Archive Fixes Spec              | ⬜ Pending | — | — | — |
 | 11 | Final Quality Pass              | ⬜ Pending | — | — | — |

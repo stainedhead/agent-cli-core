@@ -1,0 +1,2 @@
+{"schema_version":1,"ts":"2026-10-03T12:00:00Z","tool":"demo","agent_id":"agent-1","run_id":"run-1","verb":"read","resource":"incident/INC001","outcome":"ok","http_status":200,"duration":"1.5s","policy_decision":"allow"}
+{"schema_version":1,"ts":"2026-10-03T12:00:01Z","tool":"demo","agent_id":"agent-1","run_id":"run-1","verb":"write","resource":"incident/INC001","outcome":"denied","duration":"1.5s","policy_decision":"deny"}

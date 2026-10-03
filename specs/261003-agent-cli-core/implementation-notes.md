@@ -22,3 +22,8 @@ Purpose: record decisions and surprises during implementation. Update after each
 - Deny rules win regardless of order; unmatched requests are default-denied (`default-deny`).
 - Writable check uses `syscall.Access(W_OK)` on the file and its directory (build tag `unix`); default is warn, refuse is opt-in.
 
+### audit
+- Record carries `duration` as a Go duration string; encoding via explicit wire struct fixes column order for the golden test.
+- Write mode is a Logger setting (warn|block), not per-verb: the library has no read/write classification. Tools wanting the PRD's "block write operations" default use two Loggers or choose per call. Assumption.
+- Fields capped at 512 bytes and redacted so free text cannot smuggle bodies or tokens.
+- Existing log files wider than 0600 are chmod-ed to 0600 on Open.

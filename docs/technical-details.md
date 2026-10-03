@@ -118,7 +118,13 @@ Errors do not implement `output.CategoryError` because `policy` may not import `
 
 ## API: audit
 
-Not yet implemented. This section is filled in by the workstream that owns `audit`.
+Package `audit` writes a versioned JSON Lines audit log. Imports only `internal/redact` and `internal/clock`.
+
+- `SchemaVersion` (const, 1); `Record` {SchemaVersion, Timestamp, Tool, AgentID, RunID, Verb, Resource, Outcome, HTTPStatus, Duration, PolicyDecision} with JSON keys `schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`. No body or credential field exists. Pinned by `audit/testdata/golden.jsonl`.
+- `Config` {Path, OnFailure}; `Open(Config, ...Option) (*Logger, error)` (file mode 0600, parent 0700, append); `NewLogger(io.Writer, ...Option)`; `(*Logger).Log(Record) error`, `Handle(Record, actionErr) error`, `Close() error`. Safe for concurrent use; one atomic line per record.
+- Options: `WithClock`, `WithSecrets`, `WithFailureMode`, `WithOnWriteError`.
+- `WriteFailureMode` (`Warn` default, `Block`) with text marshaling; `*WriteError`, `ErrWrite`, `ErrNoPath`.
+- Every string field is redacted (`internal/redact`) and capped at 512 bytes before writing. Write failures are always returned from `Log`; `Handle` in `Block` mode returns them joined with the action's error.
 
 ## API: httpx
 

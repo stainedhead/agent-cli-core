@@ -108,7 +108,10 @@ type Authorizer struct{ src TokenSource }
 func NewAuthorizer(src TokenSource) *Authorizer { return &Authorizer{src: src} }
 
 // Authorize sets the Authorization header on req to the current bearer token.
-// The token never leaves this package except into that header. On error the
+// The token never leaves this package except into that header. Authorize does
+// not check the request host: use it through httpx, whose Config.AllowedHosts
+// and redirect policy ensure it is only called for allowed hosts (a direct
+// caller must make that check itself). On error the
 // header is left untouched.
 func (a *Authorizer) Authorize(ctx context.Context, req *http.Request) error {
 	if req == nil {

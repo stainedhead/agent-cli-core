@@ -49,7 +49,7 @@ func TestTraceRecordsErrors(t *testing.T) {
 	rt := &failingRT{errs: []error{errString("dial failed")}}
 	var buf bytes.Buffer
 	tr := NewTransport(rt, Config{Clock: newFake(), Trace: &buf})
-	req, _ := http.NewRequest(http.MethodGet, "http://u:pw@x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://u:pw@x.invalid/", nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)

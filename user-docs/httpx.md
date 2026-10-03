@@ -49,3 +49,9 @@ Set `Config.Clock` to a fake whose `Sleep` returns immediately and `Config.Rand`
 - Exit 8 right away on a POST: the request was not marked safe to retry.
 - Exit 8 with `Retry-After` larger than `MaxWait`: the wait is capped, so the server may still be limiting you; raise `MaxWait` or retry later.
 - Body not resent: build the request with `http.NewRequest` over a replayable reader, or set `GetBody`.
+
+## Host safety
+
+The client only talks to hosts you allow, so a bearer token cannot be sent somewhere else. Set `Config.AllowedHosts` (for example `[]string{"api.example.com"}`; a bare host matches any port, `host:port` pins the port). If you leave it empty, only the host of the first request is allowed. A request or redirect to any other host fails with `*httpx.ForbiddenHostError` (code `auth/forbidden-host`, exit 4) before any credential is attached, and a cross-host redirect is refused, not followed. If a legitimate redirect crosses hosts, add the target host to `AllowedHosts`.
+
+Plain `http` is refused for non-loopback hosts (`localhost` and loopback IPs are fine). Set `Config.AllowInsecureHTTP` only if you must reach a trusted plain-http endpoint.

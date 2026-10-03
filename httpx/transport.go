@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/stainedhead/agent-cli-core/internal/redact"
@@ -42,6 +43,9 @@ func idempotent(method string) bool {
 type Transport struct {
 	base http.RoundTripper
 	cfg  Config
+
+	mu      sync.Mutex
+	allowed []string // lower-cased hosts (host or host:port); pinned on first use when empty
 }
 
 // NewTransport wraps base (http.DefaultTransport when nil) with retry,
@@ -54,19 +58,30 @@ type Transport struct {
 // is spent) a *RateLimitedError is returned. A 429 or 503 Retry-After is
 // honored up to cfg.MaxWait. A 401 triggers one Refresh and one resend, taken
 // from the same budget; a second 401 yields *AuthError. A 403 yields
-// *ForbiddenError. Every other response is returned unchanged.
+// *ForbiddenError. A request to a host outside Config.AllowedHosts (by
+// default, the first request's host), or plain http to a non-loopback host
+// without Config.AllowInsecureHTTP, is refused with *ForbiddenHostError before
+// it is authorized or sent. Every other response is returned unchanged.
 func NewTransport(base http.RoundTripper, cfg Config) *Transport {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return &Transport{base: base, cfg: cfg.withDefaults()}
+	t := &Transport{base: base, cfg: cfg.withDefaults()}
+	for _, h := range cfg.AllowedHosts {
+		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
+			t.allowed = append(t.allowed, h)
+		}
+	}
+	return t
 }
 
 // NewClient returns an http.Client whose Transport is NewTransport over
-// http.DefaultTransport. Failures surface as *url.Error values wrapping the
+// http.DefaultTransport and whose CheckRedirect refuses redirects to hosts
+// outside Config.AllowedHosts (see ForbiddenHostError). Failures surface as *url.Error values wrapping the
 // typed errors of this package; use errors.As or output.CategoryOf.
 func NewClient(cfg Config) *http.Client {
-	return &http.Client{Transport: NewTransport(nil, cfg)}
+	t := NewTransport(nil, cfg)
+	return &http.Client{Transport: t, CheckRedirect: t.checkRedirect}
 }
 
 // RoundTrip implements http.RoundTripper.
@@ -80,6 +95,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// trace or an error message.
 	var held []string
 
+	if err := t.checkRequest(req); err != nil {
+		t.trace(0, req, nil, err, nil)
+		return nil, err
+	}
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err

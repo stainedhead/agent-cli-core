@@ -139,13 +139,15 @@ type TokenRefresher interface {
 
 Package `httpx` imports `output`, `internal/redact` and `internal/clock` only (never `auth`). All identifiers are public API under semver.
 
-- `Config` {`MaxRetries` (0 = 3, negative = none), `BaseDelay`, `MaxDelay`, `MaxWait`, `Jitter`, `Clock`, `Rand`, `Refresher TokenRefresher`, `VendorCode func(http.Header) string`, `Trace io.Writer`, `Redactor`}; zero fields take the `Default*` constants.
+- `Config` {`MaxRetries` (0 = 3, negative = none), `BaseDelay`, `MaxDelay`, `MaxWait`, `Jitter`, `Clock`, `Rand`, `Refresher TokenRefresher`, `VendorCode func(http.Header) string`, `Trace io.Writer`, `Redactor`, `AllowedHosts []string`, `AllowInsecureHTTP bool`}; zero fields take the `Default*` constants.
 - `Clock` {`Now`, `Sleep(ctx, d) error`}: structurally satisfied by `internal/clock` (`System`, `Fake`).
 - `NewTransport(base http.RoundTripper, cfg Config) *Transport` (implements `http.RoundTripper`); `NewClient(cfg Config) *http.Client`.
 - `MarkSafeToRetry(*http.Request) *http.Request`, `IsMarkedSafe(*http.Request) bool`.
-- Errors (all implement `output.CategoryError` and `output.Hinter`): `*RateLimitedError{Status, Attempts, Err}` (exit 8), `*AuthError{Err}` (exit 3), `*ForbiddenError{VendorCode}` (exit 4). None carries a response body.
+- Errors (all implement `output.CategoryError` and `output.Hinter`): `*RateLimitedError{Status, Attempts, Err}` (exit 8), `*AuthError{Err}` (exit 3), `*ForbiddenError{VendorCode}` (exit 4), `*ForbiddenHostError{Host, Insecure}` (exit 4, `Code()` = `auth/forbidden-host`). None carries a response body.
 
 Semantics: one attempt budget (`MaxRetries` re-sends) is shared by transient retries and the single 401 refresh. Idempotent methods (GET, HEAD, OPTIONS, TRACE, PUT, DELETE) or requests marked safe are retried on 429, 502, 503, 504 and network errors, only if the body is replayable (`GetBody`). `Retry-After` (seconds or HTTP date) on 429/503 replaces the backoff; every wait is capped at `MaxWait`; waits use the injected `Clock`, and context cancellation aborts them. Backoff is `BaseDelay * 2^n` capped at `MaxDelay`, varied by plus or minus `Jitter`. A 401 triggers `Refresh` once and a resend (allowed for non-idempotent requests, since the server rejected it unprocessed); a second 401, a missing refresher, an exhausted budget or an unreplayable body gives `*AuthError`. A 403 gives `*ForbiddenError` with a vendor code (from headers via `VendorCode`, redacted, at most 64 bytes). Tracing is off by default; when on it writes one redacted line per attempt, never bodies, with the URL reduced to scheme, host and path.
+
+Host safety (FR-001): every request is checked before it is authorized or sent. The host must be in `AllowedHosts` (entries are `host` for any port or `host:port`; empty means the first request's host is pinned), and plain `http` is refused for non-loopback hosts unless `AllowInsecureHTTP` is set; otherwise `*ForbiddenHostError` is returned, traced, and no `Authorization` is attached. `NewClient` installs a `CheckRedirect` applying the same check (and the 10-redirect limit), so a cross-host redirect is refused and never carries credentials. `NewTransport` used under a caller's own `http.Client` still refuses the redirected request at the transport.
 
 ## API: selftest
 

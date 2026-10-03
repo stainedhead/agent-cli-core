@@ -451,7 +451,7 @@ func (f *failingRT) RoundTrip(*http.Request) (*http.Response, error) {
 func TestNetworkErrorRetriedForIdempotent(t *testing.T) {
 	rt := &failingRT{errs: []error{errors.New("reset"), nil}}
 	tr := NewTransport(rt, Config{Clock: newFake()})
-	req, _ := http.NewRequest(http.MethodGet, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://x.invalid/", nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil || rt.n.Load() != 2 {
 		t.Fatalf("err=%v n=%d", err, rt.n.Load())
@@ -463,7 +463,7 @@ func TestNetworkErrorExhausted(t *testing.T) {
 	boom := errors.New("reset")
 	rt := &failingRT{errs: []error{boom, boom, boom, boom, boom}}
 	tr := NewTransport(rt, Config{Clock: newFake(), MaxRetries: 1})
-	req, _ := http.NewRequest(http.MethodGet, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	var rl *RateLimitedError
 	if !errors.As(err, &rl) || !errors.Is(err, boom) || rt.n.Load() != 2 || rl.Status != 0 {
@@ -475,7 +475,7 @@ func TestNetworkErrorNotRetriedForPost(t *testing.T) {
 	boom := errors.New("reset")
 	rt := &failingRT{errs: []error{boom}}
 	tr := NewTransport(rt, Config{Clock: newFake()})
-	req, _ := http.NewRequest(http.MethodPost, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodPost, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	if !errors.Is(err, boom) || rt.n.Load() != 1 {
 		t.Fatalf("err=%v n=%d", err, rt.n.Load())
@@ -489,7 +489,7 @@ func TestNetworkErrorNotRetriedForPost(t *testing.T) {
 func TestContextCanceledNotRetried(t *testing.T) {
 	rt := &failingRT{errs: []error{context.Canceled, nil}}
 	tr := NewTransport(rt, Config{Clock: newFake()})
-	req, _ := http.NewRequest(http.MethodGet, "http://x.invalid/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://x.invalid/", nil)
 	_, err := tr.RoundTrip(req)
 	if !errors.Is(err, context.Canceled) || rt.n.Load() != 1 {
 		t.Fatalf("err=%v n=%d", err, rt.n.Load())

@@ -69,6 +69,15 @@ type Config struct {
 	// Trace, when non-nil, receives one redacted line per attempt. Tracing is
 	// off by default. Bodies are never traced.
 	Trace io.Writer
+	// AllowedHosts lists the hosts (host or host:port; a bare host matches any
+	// port) the transport may send to and authorize for. Empty means only the
+	// host of the first request through the Transport. Any other host,
+	// including a redirect target, is refused with *ForbiddenHostError and no
+	// credential is attached.
+	AllowedHosts []string
+	// AllowInsecureHTTP permits plain http to non-loopback hosts. By default
+	// only https, or http to localhost or a loopback IP, is allowed.
+	AllowInsecureHTTP bool
 	// Redactor scrubs traced values. Nil means a default redactor.
 	Redactor *redact.Redactor
 }

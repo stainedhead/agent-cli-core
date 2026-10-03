@@ -49,9 +49,17 @@ func Success(data any, meta *Meta) Envelope {
 }
 
 // Failure returns a failure envelope. Message and hint are passed through the
-// redactor.
+// built-in redaction patterns only; use FailureWithSecrets (or Options.Secrets
+// on Write) to also remove literal secrets the patterns cannot recognise.
 func Failure(c Category, message, hint string) Envelope {
-	r := redact.New()
+	return FailureWithSecrets(c, message, hint)
+}
+
+// FailureWithSecrets is Failure that also removes every occurrence of the
+// given literal secrets (for example a token the process holds) from message
+// and hint. Write scrubs the error envelope again with Options.Secrets.
+func FailureWithSecrets(c Category, message, hint string, secrets ...string) Envelope {
+	r := redact.New(secrets...)
 	return Envelope{Error: &Error{Code: c, Message: r.String(message), Hint: r.String(hint)}}
 }
 
@@ -60,6 +68,12 @@ func Failure(c Category, message, hint string) Envelope {
 // message is err.Error() and whose hint comes from a Hinter in the chain, both
 // redacted.
 func FromError(err error) Envelope {
+	return FromErrorWithSecrets(err)
+}
+
+// FromErrorWithSecrets is FromError that also removes every occurrence of the
+// given literal secrets from the message and hint.
+func FromErrorWithSecrets(err error, secrets ...string) Envelope {
 	if err == nil {
 		return Success(nil, nil)
 	}
@@ -67,7 +81,7 @@ func FromError(err error) Envelope {
 	if h, ok := findHinter(err); ok {
 		hint = h.Hint()
 	}
-	return Failure(CategoryOf(err), err.Error(), hint)
+	return FailureWithSecrets(CategoryOf(err), err.Error(), hint, secrets...)
 }
 
 func findHinter(err error) (Hinter, bool) {

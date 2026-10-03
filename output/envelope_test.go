@@ -90,3 +90,36 @@ func ExampleFromError() {
 	// {"ok":false,"error":{"code":"policy_denied","message":"denied by rule r1","hint":"ask a human to approve"}}
 	// 6
 }
+
+func TestFailureWithSecretsScrubsLiteral(t *testing.T) {
+	env := output.FailureWithSecrets(output.CategoryAuth, "bad key abc-123-xyz", "retry with abc-123-xyz", "abc-123-xyz")
+	if strings.Contains(env.Error.Message, "abc-123-xyz") || strings.Contains(env.Error.Hint, "abc-123-xyz") {
+		t.Fatalf("leak: %+v", env.Error)
+	}
+	// Plain Failure cannot know the literal; Write with Secrets is the second line.
+	plain := output.Failure(output.CategoryAuth, "bad key abc-123-xyz", "")
+	b := mustRender(t, plain, output.Options{Secrets: []string{"abc-123-xyz"}})
+	if strings.Contains(string(b), "abc-123-xyz") {
+		t.Fatalf("Write did not rescrub: %s", b)
+	}
+	b = mustRender(t, env, output.Options{})
+	if strings.Contains(string(b), "abc-123-xyz") {
+		t.Fatalf("leak on constructed path: %s", b)
+	}
+}
+
+func TestFromErrorWithSecretsScrubsLiteralAndKeepsHint(t *testing.T) {
+	err := fmt.Errorf("call failed for abc-123-xyz: %w", hinted{})
+	env := output.FromErrorWithSecrets(err, "abc-123-xyz")
+	if strings.Contains(env.Error.Message, "abc-123-xyz") || env.Error.Hint != "try again" {
+		t.Fatalf("env: %+v", env.Error)
+	}
+	if got := output.FromErrorWithSecrets(nil, "abc-123-xyz"); !got.OK {
+		t.Fatal("nil must be success")
+	}
+}
+
+type hinted struct{}
+
+func (hinted) Error() string { return "hinted" }
+func (hinted) Hint() string  { return "try again" }

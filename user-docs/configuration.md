@@ -1,6 +1,6 @@
 # Configuration reference
 
-Everything the library can be configured with. The library defines no command-line flags and reads no environment variables: your CLI decides how values reach it (flags, files, environment) and passes them in. Where a PRD-style name is useful, the table says "suggested flag".
+Everything the library can be configured with. The library defines no command-line flags and reads no environment variables: your CLI decides how values reach it (flags, files, environment) and passes them in. Where a conventional name helps, the table gives a suggested flag.
 
 ## Policy file (YAML)
 

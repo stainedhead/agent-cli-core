@@ -63,7 +63,7 @@ func TestHeader(t *testing.T) {
 	h.Set("X-Api-Key", "k")
 	h.Set("X-Auth-Token", "t")
 	h.Set("Content-Type", "application/json")
-	h.Add("X-Note", "Bearer zzz")
+	h.Add("X-Note", "Bearer zzz123")
 	out := redact.New().Header(h)
 	for _, k := range []string{"Authorization", "Cookie", "X-Api-Key", "X-Auth-Token"} {
 		if v := out.Get(k); v != "[redacted]" {
@@ -126,4 +126,60 @@ func ExampleRedactor_String() {
 	r := redact.New()
 	fmt.Println(r.String("failed: Authorization: Bearer abc.def and token=xyz"))
 	// Output: failed: Authorization: [redacted] and token=[redacted]
+}
+
+func TestAuthSchemeProseNotOverMatched(t *testing.T) {
+	r := redact.New()
+	keep := []string{
+		"the basic usage of the tool",
+		"Basic information about the host",
+		"a bearer of bad news",
+		"basic authentication is not supported",
+		"Bearer of Tidings",
+		"use basic, then bearer",
+	}
+	for _, in := range keep {
+		if got := r.String(in); got != in {
+			t.Errorf("prose over-redacted: %q -> %q", in, got)
+		}
+	}
+}
+
+func TestAuthSchemeCredentialsStillRedacted(t *testing.T) {
+	r := redact.New()
+	cases := []struct{ in, want string }{
+		{"Authorization: Bearer abc", "Authorization: [redacted]"},
+		{"authorization=basic zz", "authorization=[redacted]"},
+		{"bearer SECRETVALUE1", "[redacted]"},
+		{"Basic dXNlcjpwYXNz", "[redacted]"},
+		{"sent bearer abc.def-123 here", "sent [redacted] here"},
+	}
+	for _, c := range cases {
+		if got := r.String(c.in); got != c.want {
+			t.Errorf("%q -> %q want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestOpaqueThresholdAndSHA1(t *testing.T) {
+	r := redact.New()
+	sha1 := strings.Repeat("0123456789abcdef", 3)[:40]
+	if got := r.String("commit " + sha1 + " ok"); got != "commit "+sha1+" ok" {
+		t.Errorf("git SHA-1 must be preserved: %q", got)
+	}
+	sha256 := strings.Repeat("a1", 32)
+	if got := r.String("x " + sha256); got != "x [redacted]" {
+		t.Errorf("64-hex run must be redacted: %q", got)
+	}
+	run41 := strings.Repeat("aB3", 14)[:41]
+	if got := r.String(run41); got != "[redacted]" {
+		t.Errorf("41-char run: %q", got)
+	}
+	mixed40 := strings.Repeat("aB3", 14)[:40]
+	if got := r.String(mixed40); got != "[redacted]" {
+		t.Errorf("40-char non-hex run must be redacted: %q", got)
+	}
+	if redact.OpaqueRunMin != 40 {
+		t.Errorf("OpaqueRunMin = %d", redact.OpaqueRunMin)
+	}
 }

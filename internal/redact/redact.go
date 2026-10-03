@@ -20,15 +20,51 @@ const Placeholder = "[redacted]"
 const minSecretLen = 6
 
 var (
+	// reAuthContext matches a scheme and credential after an "authorization"
+	// key; there the credential is redacted whatever it looks like.
+	reAuthContext = regexp.MustCompile(`(?i)(\bauthorization\s*[:=]\s*"?)(?:bearer|basic)\s+[A-Za-z0-9._~+/=\-]+`)
+	// reAuthScheme matches a bare scheme word and a candidate credential; a
+	// match is redacted only if it looks like a credential (see looksLikeCredential).
 	reAuthScheme = regexp.MustCompile(`(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=\-]+`)
 	reJWT        = regexp.MustCompile(`\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*`)
 	// key=value and "key":"value" forms for sensitive key names.
 	reKeyValue = regexp.MustCompile(`(?i)(\b[a-z_\-]*(?:token|secret|password|passwd|api[_\-]?key|authorization)[a-z_\-]*"?\s*[=:]\s*"?)([^\s"&;,}]+)`)
 	// Long opaque runs look like keys or tokens. UUIDs (36 chars) stay.
 	reOpaque = regexp.MustCompile(`[A-Za-z0-9_\-]{40,}`)
+	reSHA1   = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 	sensitiveHeaderParts = []string{"authorization", "cookie", "token", "secret", "password", "api-key", "apikey"}
 )
+
+// OpaqueRunMin is the length at which a run of [A-Za-z0-9_-] is treated as an
+// opaque key or token and redacted. UUIDs (36 characters) stay readable. A run
+// of exactly 40 lowercase hex digits is a git SHA-1 and is preserved; longer
+// hex runs (SHA-256 and up) and any other 40+ character run are redacted.
+const OpaqueRunMin = 40
+
+// Thresholds for a credential after a bare "bearer"/"basic" outside an
+// authorization context: a token with a digit or symbol needs minMixedCredLen
+// characters; a letters-only token needs minLetterCredLen and an uppercase
+// letter after the first character (base64-like).
+const (
+	minMixedCredLen  = 4
+	minLetterCredLen = 8
+)
+
+// looksLikeCredential reports whether the text after a bare auth-scheme word
+// is plausibly a credential and not an ordinary word.
+func looksLikeCredential(cred string) bool {
+	mixed, upper := false, false
+	for i, c := range cred {
+		switch {
+		case c >= '0' && c <= '9', strings.ContainsRune("._~+/=-", c):
+			mixed = true
+		case i > 0 && c >= 'A' && c <= 'Z':
+			upper = true
+		}
+	}
+	return (mixed && len(cred) >= minMixedCredLen) || (upper && len(cred) >= minLetterCredLen)
+}
 
 // Redactor scrubs secrets. The zero value is not useful; use New. A Redactor
 // is immutable after construction and safe for concurrent use.
@@ -37,7 +73,8 @@ type Redactor struct {
 }
 
 // New returns a Redactor that, besides the built-in patterns (Authorization
-// schemes, JWTs, token/secret/password key-value pairs, long opaque strings),
+// schemes, JWTs, token/secret/password key-value pairs, opaque runs of
+// OpaqueRunMin or more characters except git SHA-1s),
 // removes every occurrence of the given literal secrets. Secrets shorter than
 // six bytes are ignored.
 func New(secrets ...string) *Redactor {
@@ -59,10 +96,22 @@ func (r *Redactor) String(s string) string {
 	for _, sec := range r.secrets {
 		s = strings.ReplaceAll(s, sec, Placeholder)
 	}
-	s = reAuthScheme.ReplaceAllString(s, Placeholder)
+	s = reAuthContext.ReplaceAllString(s, "${1}"+Placeholder)
+	s = reAuthScheme.ReplaceAllStringFunc(s, func(m string) string {
+		i := strings.IndexAny(m, " \t\r\n")
+		if i < 0 || !looksLikeCredential(strings.TrimSpace(m[i:])) {
+			return m
+		}
+		return Placeholder
+	})
 	s = reJWT.ReplaceAllString(s, Placeholder)
 	s = reKeyValue.ReplaceAllString(s, "${1}"+Placeholder)
-	s = reOpaque.ReplaceAllString(s, Placeholder)
+	s = reOpaque.ReplaceAllStringFunc(s, func(m string) string {
+		if reSHA1.MatchString(m) {
+			return m
+		}
+		return Placeholder
+	})
 	return s
 }
 

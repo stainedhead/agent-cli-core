@@ -117,10 +117,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				return nil, sendErr
 			}
 			if !retriable {
-				return nil, sendErr
+				return nil, t.scrubbedSendError(sendErr, held)
 			}
 			if !canRetry {
-				return nil, &RateLimitedError{Attempts: attempt, Err: sendErr}
+				return nil, t.rateLimitedSend(attempt, sendErr, held)
 			}
 			if err := t.cfg.Clock.Sleep(ctx, t.wait(t.cfg.backoff(attempt-1))); err != nil {
 				return nil, err

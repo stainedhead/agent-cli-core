@@ -29,13 +29,17 @@ Untrusted content: the tool wraps free-text fields in `output.Untrusted`. JSON g
 
 Bounds: default 32768 bytes. Arrays drop whole trailing items, strings are cut on a character boundary; `meta.truncated` and `meta.next_offset` (an item index for arrays, a byte offset for strings) let the caller resume through `Bounds.Offset`. The tool chooses the flag name (for example `--offset`).
 
+## Host safety (`httpx`)
+
+Requests and redirects go only to hosts in `Config.AllowedHosts` (default: the first request's host); plain http to non-loopback hosts needs `AllowInsecureHTTP`. Violations return `*ForbiddenHostError` (code `auth/forbidden-host`, exit 4) before a credential is attached. Transport errors are scrubbed of URL query, userinfo and held credentials.
+
 ## Token handling (`auth`)
 
-No exported function returns a token as text. `auth.Token` prints `[redacted]` under every fmt verb, JSON, text marshaling and `log/slog`. The only way the value reaches the network is `Authorizer.Authorize` writing the `Authorization` header. There is no fallback credential path: an unreachable daemon is exit 3 and nothing else is tried. The provider name is supplied by the tool.
+No exported function returns a token as text. `auth.Token` prints `[redacted]` under every fmt verb (also inside an unexported struct field), JSON, text marshaling and `log/slog`. The only way the value reaches the network is `Authorizer.Authorize` writing the `Authorization` header. There is no fallback credential path: an unreachable daemon is exit 3 and nothing else is tried. The provider name is supplied by the tool.
 
 ## Policy (`policy`)
 
-Strict YAML, fail closed. Deny rules always win; unmatched requests are denied (`default-deny`). Write modes `allow`, `dry_run_only` (previews only; `Allowed` is false) and `deny`. Rate limits `per_hour` (sliding) and `per_run`. A policy is a guardrail, not a security control; server-side permissions remain the boundary. Optional warn/refuse when the policy file is writable by the current user (POSIX only).
+Strict YAML, fail closed. Deny rules always win; unmatched requests are denied (`default-deny`). Write modes `allow`, `dry_run_only` (previews only; `Allowed` is false) and `deny`. Rate limits `per_hour` (sliding; only these keep hit timestamps) and `per_run`. A policy is a guardrail, not a security control; server-side permissions remain the boundary. Optional warn/refuse when the policy file is writable by the current user (POSIX only).
 
 ## Audit (`audit`)
 

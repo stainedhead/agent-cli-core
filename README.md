@@ -32,7 +32,7 @@ Arrows read "is depended on by". This library does not import `agent-okta-d` yet
 | `auth` | `TokenSource` / `DaemonClient` interfaces, daemon-backed source, redacting token, 401 refresh hook; `auth/authtest` fakes | [auth](user-docs/auth.md) |
 | `policy` | Strict-YAML guardrail policy: allow/deny per verb and resource, field allowlists, constraints, write modes, rate limits, caps | [policy](user-docs/policy.md) |
 | `audit` | JSON Lines audit log, no secrets, no bodies | [audit](user-docs/audit.md) |
-| `httpx` | Retrying HTTP transport: jitter, `Retry-After`, idempotency rules, one refresh on 401, redacted tracing | [httpx](user-docs/httpx.md) |
+| `httpx` | Retrying HTTP transport: jitter, `Retry-After`, idempotency rules, one refresh on 401, host allow-list and redirect check, redacted tracing | [httpx](user-docs/httpx.md) |
 | `selftest` | Expected-allow/deny matrix runner | [selftest](user-docs/selftest.md) |
 | `docgen` | Deterministic SKILL.md from a command tree | [docgen](user-docs/docgen.md) |
 

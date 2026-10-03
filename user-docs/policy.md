@@ -64,6 +64,10 @@ Evaluation: a matching deny rule always wins; otherwise the first allow rule who
 
 Use `p.Limits.ClampResults(n)` and `ClampBytes(n)` to feed the caps into your output bounds.
 
+## Rate-limit bookkeeping
+
+The engine only keeps a timestamp window for rules that set `per_hour`. A policy with only `per_run` limits (or none) uses a fixed amount of memory however long the process runs; `per_hour` windows are pruned as hits age out.
+
 ## Failing closed
 
 Unknown keys, duplicate keys, an empty file, a wrong `version`, duplicate rule ids, an invalid regular expression, a negative limit or a deny rule with a mode all make `Parse` and `Load` return `*policy.InvalidError`. Treat that as fatal and do not run. Report it with the `validation` category.

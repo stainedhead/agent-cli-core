@@ -70,6 +70,8 @@ The zero value is usable.
 | `Refresher` | none | Authorizes each attempt and refreshes once on 401. `*auth.Authorizer` fits. Without it a 401 is `*AuthError` |
 | `VendorCode` | none | `func(http.Header) string` extracting a vendor code from a 403's headers |
 | `Trace` | nil (off) | `io.Writer` receiving one redacted line per attempt; leave nil in agent mode |
+| `AllowedHosts` | first request's host | Hosts the client may contact (`host` for any port, `host:port` to pin). Others, including redirect targets, fail with `*httpx.ForbiddenHostError` (exit 4) before any credential is attached |
+| `AllowInsecureHTTP` | false | Permit plain `http` to non-loopback hosts; loopback is always allowed |
 | `Redactor` | default | Cannot be constructed outside the module; leave nil |
 
 Per request: `httpx.MarkSafeToRetry(req)` allows retrying a POST or PATCH that carries an idempotency key. The package constants `DefaultMaxRetries`, `DefaultBaseDelay`, `DefaultMaxDelay`, `DefaultMaxWait`, `DefaultJitter` hold the defaults.

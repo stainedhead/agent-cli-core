@@ -47,7 +47,7 @@ Failure: `{"ok":false,"error":{"code":"policy_denied","message":"...","hint":"..
 | 8 | `ExitRateLimited` | `rate_limited` |
 | 9 | `ExitValidation` | `validation` |
 
-Make your own errors map to a code by implementing `output.CategoryError` (`Category() output.Category`). Add `Hint() string` to supply `error.hint`. `output.FromError(err)` and `output.ExitOf(err)` find the category anywhere in a wrapped error chain; an error with no category is `general` (exit 1).
+Make your own errors map to a code by implementing `output.CategoryError` (`Category() output.Category`). Add `Hint() string` to supply `error.hint`. `output.FromError(err)` and `output.ExitOf(err)` find the category anywhere in a wrapped error chain, and `FromError` finds the hint the same way, including inside `errors.Join`; an error with no category is `general` (exit 1).
 
 ```go
 type notFound struct{ id string }

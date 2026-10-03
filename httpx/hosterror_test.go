@@ -234,3 +234,29 @@ func TestEmptyHostRefused(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestRefusedRedirectIsTracedAndScrubbed(t *testing.T) {
+	var buf strings.Builder
+	evil := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("redirect target must not be contacted")
+	}))
+	defer evil.Close()
+	evilURL := strings.Replace(evil.URL, "127.0.0.1", "localhost", 1)
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, evilURL+"/p?token=secretvalue1", http.StatusFound)
+	}))
+	defer good.Close()
+	c := NewClient(Config{Trace: &buf})
+	_, err := c.Get(good.URL + "/start")
+	var fh *ForbiddenHostError
+	if !errors.As(err, &fh) {
+		t.Fatalf("got %v", err)
+	}
+	if got := output.ExitOf(err); got != output.ExitForbidden {
+		t.Fatalf("exit %d", got)
+	}
+	tr := buf.String()
+	if !strings.Contains(tr, "forbidden host") || strings.Contains(tr, "secretvalue1") {
+		t.Fatalf("trace: %s", tr)
+	}
+}

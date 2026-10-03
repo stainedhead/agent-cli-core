@@ -52,7 +52,11 @@ func (t *Transport) checkRedirect(req *http.Request, via []*http.Request) error 
 	if len(via) >= maxRedirects {
 		return &redirectLimitError{}
 	}
-	return t.checkRequest(req)
+	if err := t.checkRequest(req); err != nil {
+		t.trace(0, req, nil, err, nil)
+		return err
+	}
+	return nil
 }
 
 type redirectLimitError struct{}

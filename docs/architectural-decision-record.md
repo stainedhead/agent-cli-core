@@ -80,3 +80,9 @@ Decided in the feature spec (2026-10-03):
 - Who owns the policy schema across the tools (a generic schema ships; ownership is unassigned).
 - First tagged `agent-okta-d` release containing `pkg/client` (gates only the adapter).
 - The shared-skill update in the root repository is a manual pull request per release.
+
+## ADR-15: Hosts are allow-listed, redirects checked
+
+Context: auto-review found a bearer token could follow a cross-host redirect or travel over plain http.
+Decision: `httpx` pins hosts (`AllowedHosts`, default first request's host), refuses non-loopback plain http unless `AllowInsecureHTTP`, and installs `CheckRedirect` in `NewClient`; the transport also checks every request, so custom clients are covered. Redaction of bare `bearer`/`basic` became context-sensitive and a 40-hex git SHA-1 is preserved. `auth.Token` stores its value in a closure so reflection-based printing cannot reveal it.
+Consequences: a legitimate cross-host redirect needs the target in `AllowedHosts`; short all-letter bare credentials outside an `authorization` context are no longer pattern-redacted (register them as literal secrets).

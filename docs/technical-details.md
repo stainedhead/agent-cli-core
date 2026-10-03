@@ -101,7 +101,20 @@ Tests: table tests with the fake; `TestNoExportedFunctionReturnsTokenText` scans
 
 ## API: policy
 
-Not yet implemented. This section is filled in by the workstream that owns `policy`.
+Package `policy` evaluates a client-side guardrail policy loaded from strict YAML. Imports the standard library and `github.com/goccy/go-yaml` only. **A policy is a guardrail, not a security control**: an allowed decision does not mean the server will allow the action; server-side permissions remain the boundary.
+
+| Symbol | Purpose |
+|---|---|
+| `Parse([]byte) (*Policy, error)`, `Load(path, ...Option) (*Policy, error)` | Strict parse. Unknown or duplicate keys, an empty file, a bad version, duplicate rule ids, bad patterns or negative limits return `*InvalidError`; no `Policy` is returned (fail closed). `Load` also checks writability. |
+| `Policy`, `Rule`, `Constraint`, `Rate`, `Limits`, `Effect`, `Mode`, `Version` | The schema. `Effect` is `allow`/`deny`; `Mode` is `allow`/`dry_run_only`/`deny`. |
+| `Request{Verb, Resource, Fields}` | What the tool asks about. Verb and resource are opaque strings; `*` in rule patterns matches any run of characters. |
+| `(*Policy).Evaluate(Request) Decision` | Pure decision, no rate limits. Deny rules always win; the first allow rule whose field allowlist and constraints hold decides; nothing matching is denied (`DefaultDenyID`). A nil policy denies. |
+| `Decision{Allowed, Mode, RuleID, Reason, RetryAfter}`, `DryRunOnly()`, `Err()`, `DeniedError` | Decision as data. `Allowed` is true only for mode `allow`; `dry_run_only` has `Allowed=false` so a caller checking only `Allowed` fails safe. `Err()` returns `*DeniedError` for any non-allowed decision; the caller maps it to `output.CategoryPolicyDenied` (exit 6) and records `RuleID` and `Reason` as the audit `policy_decision`. |
+| `NewEngine(*Policy, Clock)`, `(*Engine).Check`, `Clock` | Adds global and per-rule rate limits (`per_hour` sliding window, `per_run` since engine creation), mutex-protected. Only `allow` decisions consume budget; a limit denial carries `RetryAfter`. `internal/clock` `System`/`Fake` satisfy `Clock`; nil means real time. |
+| `Limits{MaxResults, MaxBytes}`, `ClampResults`, `ClampBytes` | Caps the tool feeds into the output bounds. Zero means no cap. |
+| `WithWritable(WritableWarn\|WritableRefuse\|WritableIgnore)`, `WritableError`, `(*Policy).Warnings()` | POSIX only: warn (default) or refuse when the current user can write the policy file or its directory. |
+
+Errors do not implement `output.CategoryError` because `policy` may not import `output` (dependency rule); the caller maps them. A parse failure should be reported as category `validation` and the tool must not run.
 
 ## API: audit
 

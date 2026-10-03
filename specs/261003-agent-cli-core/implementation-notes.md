@@ -15,3 +15,10 @@ Purpose: record decisions and surprises during implementation. Update after each
 - Daemon errors other than reauth/revoked/unreachable become `*TokenError` (category auth, exit 3, message scrubbed by `internal/redact`): a token that cannot be obtained is an auth failure and nothing else is tried.
 - `authtest.Fake` also serves a fake resource server (`Handler`) so 401 scenarios are testable without httpx; the 401-refresh-retry policy itself belongs to `httpx`. `UnreachableError` text contains the daemon service name as a string only.
 - Assumption: the 401 scenarios model the daemon PRD's refresh endpoint semantics; not verified against a real daemon.
+### policy
+- policy imports nothing internal (archtest), so it declares its own one-method `Clock` instead of importing `internal/clock`; `clock.System` and `clock.Fake` satisfy it structurally.
+- Errors cannot implement `output.CategoryError` (that needs `output.Category`); the caller maps `Decision`/`*InvalidError` to categories. Invalid policy is documented as category `validation`.
+- `dry_run_only` decisions have `Allowed=false` so that callers checking only `Allowed` fail safe; `DryRunOnly()` identifies them. Only `allow` decisions consume rate budget.
+- Deny rules win regardless of order; unmatched requests are default-denied (`default-deny`).
+- Writable check uses `syscall.Access(W_OK)` on the file and its directory (build tag `unix`); default is warn, refuse is opt-in.
+

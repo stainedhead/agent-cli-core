@@ -114,4 +114,14 @@ Not yet implemented. This section is filled in by the workstream that owns `self
 
 ## API: docgen
 
-Not yet implemented. This section is filled in by the workstream that owns `docgen`.
+Package `docgen` renders a deterministic SKILL.md from a command tree. It imports only `output` and the standard library.
+
+- `type CommandTree struct{ Name, Description string; Commands []Command }` - the tool. `Name` is required (letters, digits, `.`, `_`, `-`).
+- `type Command struct{ Name, Description, Usage string; Examples, Forbidden []string }` - one command. Names are unique within the tree.
+- `func Generate(tree CommandTree) ([]byte, error)` - front matter (`name`, `description`), a `## Commands` section (commands sorted by name, `Forbidden` sorted, `Examples` in given order), then the fixed sections. The input is not modified. No timestamps; the same tree always gives the same bytes.
+- `const SharedSkill = "agent-cli-core"` - the shared conventions skill that the last section points to instead of duplicating policy, credential and output-bound guidance.
+- `type Error` - returned for an invalid tree; implements `output.CategoryError` with `CategoryValidation` (exit 9).
+
+Always-included sections: `## Untrusted content` (the rule, plus the JSON and text marking built from `output.Untrusted`), `## Output envelope` (success and failure examples marshaled from `output.Success` and `output.Failure`), `## Exit codes` (one row per `output.Categories()` entry with `output.ExitFor`) and `## Shared conventions`. A test fails if `output` gains a category with no meaning text in `docgen`.
+
+User-supplied text is single-lined (descriptions, forbidden items) or placed in a code fence longer than any backtick run it contains (usage, examples), so it cannot inject headings or front matter. The golden file is `docgen/testdata/SKILL.golden.md`; refresh it with `go test ./docgen -update`.

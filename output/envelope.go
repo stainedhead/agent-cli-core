@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 
 	"github.com/stainedhead/agent-cli-core/internal/redact"
 )
@@ -84,17 +85,12 @@ func FromErrorWithSecrets(err error, secrets ...string) Envelope {
 	return FailureWithSecrets(CategoryOf(err), err.Error(), hint, secrets...)
 }
 
+// findHinter locates a Hinter anywhere in err's tree, with errors.As
+// semantics (wrapped errors and errors.Join are traversed).
 func findHinter(err error) (Hinter, bool) {
-	for err != nil {
-		if h, ok := err.(Hinter); ok {
-			return h, true
-		}
-		switch u := err.(type) {
-		case interface{ Unwrap() error }:
-			err = u.Unwrap()
-		default:
-			return nil, false
-		}
+	var h Hinter
+	if errors.As(err, &h) {
+		return h, true
 	}
 	return nil, false
 }

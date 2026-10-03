@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stainedhead/agent-cli-core/audit"
 	"github.com/stainedhead/agent-cli-core/output"
 )
 
@@ -123,3 +124,21 @@ type hinted struct{}
 
 func (hinted) Error() string { return "hinted" }
 func (hinted) Hint() string  { return "try again" }
+
+func TestHintFoundThroughJoinedErrors(t *testing.T) {
+	werr := &audit.WriteError{Err: errors.New("disk full")}
+	cases := map[string]error{
+		"join action then audit": errors.Join(hintErr{}, werr),
+		"join audit then action": errors.Join(werr, hintErr{}),
+		"wrapped join":           fmt.Errorf("run: %w", errors.Join(werr, fmt.Errorf("x: %w", hintErr{}))),
+	}
+	for name, err := range cases {
+		env := output.FromError(err)
+		if env.Error.Hint != "ask a human to approve" {
+			t.Errorf("%s: hint = %q", name, env.Error.Hint)
+		}
+	}
+	if h := output.FromError(errors.Join(werr)).Error.Hint; h != "" {
+		t.Errorf("no hinter: hint = %q", h)
+	}
+}

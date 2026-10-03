@@ -189,7 +189,7 @@ User-supplied text is single-lined (descriptions, forbidden items) or placed in 
 
 Notes a consumer should know:
 
-- `httpx.Config.Redactor` and `audit.WithClock` mention types from `internal/`. Outside this module the `Redactor` field can only be left nil (a default is used), and `WithClock` accepts any value with `Now() time.Time`. `httpx.Clock` and `policy.Clock` are declared in their packages so consumers can name them.
+- `httpx.Config.Redactor` and `audit.WithClock` mention types from `internal/`. Outside this module the `Redactor` field can only be left nil (a default is used), and `WithClock` accepts any value with `Now() time.Time` and `Sleep(ctx, d) error` (the same shape as `httpx.Clock`). `httpx.Clock` and `policy.Clock` are declared in their packages so consumers can name them.
 - The `policy` package does not import `output`; its errors carry no category and the caller maps them (denial to `policy_denied`, invalid policy to `validation`).
 
 ## Versioning and API stability (PRD API-1..API-9)

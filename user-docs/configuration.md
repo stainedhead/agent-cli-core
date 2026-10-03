@@ -50,7 +50,7 @@ The policy file is a guardrail, not a security control. Keep it where the agent 
 | `WithFailureMode(m)` | `audit.Warn` or `audit.Block` (alternative to `Config.OnFailure`) |
 | `WithOnWriteError(f)` | Called in warn mode with the failed write's error; print it on stderr |
 | `WithSecrets(s...)` | Literal values that must never be written |
-| `WithClock(c)` | Timestamp source for tests; any value with `Now() time.Time` |
+| `WithClock(c)` | Timestamp source for tests; any value with `Now() time.Time` and `Sleep(ctx, d) error` |
 
 Record schema (version 1): `schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`. Text fields are redacted and capped at 512 bytes.
 

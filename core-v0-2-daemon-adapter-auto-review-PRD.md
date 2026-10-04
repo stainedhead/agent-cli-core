@@ -2,7 +2,7 @@
 
 **Created:** 2026-10-04
 **Jira:** N/A
-**Status:** Draft
+**Status:** Reviewed (step 8)
 **Feature name:** core-v0-2-daemon-adapter-auto-review
 **Branch:** feat/core-v0.2
 **Reviewed spec:** specs/261003-core-v0-2-daemon-adapter (archived in step 9)
@@ -10,6 +10,27 @@
 ## Problem Statement
 
 A step-7 review of the diff `main...feat/core-v0.2` (spec FR-001..FR-012) found the implementation sound: no P0 findings, and no change to any v0.1.0 exported signature or default behaviour. This PRD lists the small number of defects and hardening items that remain. Two are security-adjacent (a documentation overclaim about `CheckTrustedFile`, and audit `Extra` keys that bypass redaction); the rest are robustness and test-hygiene items.
+
+## Goals
+
+- G1: Close the two P1 findings (documentation overclaim, audit key redaction) so the release makes no false security statement.
+- G2: Close the P2 robustness and test-hygiene items without any change to a v0.1.0 exported identifier.
+
+## Non-Goals
+
+- New features, API additions beyond those named below, tagging or releasing, and the items already in `docs/deferred.md`.
+
+## Dependencies
+
+- `agent-okta-d` v0.1.0 `pkg/client` and `clienttest` (read-only) for R-P2-1 and R-P2-2.
+- A Linux non-root environment (CI matrix or container) to confirm R-P2-4; Docker was unavailable during review.
+- `apidiff` (golang.org/x/exp) for the compatibility re-check in the NFRs.
+
+## Open questions
+
+- Q1 (R-P1-2): reject keys whose redacted form differs (proposed, consistent with D-C1) or silently drop them? Owner: maintainer; default is reject.
+- Q2 (R-P1-1): is a descriptor-returning `OpenTrustedFile` wanted in v0.3 or never? Owner: maintainer; default is a deferred entry.
+- Q3 (R-P2-1): does the client return a context error when the caller context is already cancelled and the socket is dead? Verify in the fix; if not, keep the current precedence and document it.
 
 ## Review method and evidence
 
@@ -86,6 +107,13 @@ Validation compares trimmed names; `writeTree` sorts by the untrimmed `Name` wit
 Acceptance criteria:
 - Sort by `strings.TrimSpace(Name)` (use `sort.SliceStable`); test with `" b"` and `"a"` siblings that the output is the same for both input orders.
 
+## Implementation guidance
+
+- TDD: write the failing test for each requirement first (red), then the fix (green), then refactor.
+- Review: one focused code review per fix (`/review-code` on the fix commit) before the next starts; P1 items before P2.
+- Parallelism: the requirements touch disjoint areas (docs/policy: R-P1-1, R-P2-4, R-P2-5; audit: R-P1-2; oktad: R-P2-1, R-P2-2; clock and docgen tests: R-P2-3, R-P2-6). They may be given to agent teammates, each in its own git worktree under `.worktrees/`, merged back into `feat/core-v0.2` in any order. `docs/` edits for R-P1-1 and R-P2-5 are by one owner to avoid conflicts.
+- No P0 items exist; P1 items are blockers for the PR because they affect a security statement and the redaction guarantee, P2 items are not blockers.
+
 ## Non-functional requirements
 
 - No change to any v0.1.0 exported identifier; `apidiff` (or the manual symbol diff) still lists additions only.
@@ -95,3 +123,9 @@ Acceptance criteria:
 ## Out of scope
 
 Tagging, the CI downstream job, and the deferred items already in `docs/deferred.md`.
+
+## Observability and security NFRs
+
+- Security: no change may print or store a token, key or file body in an error or log; new error text must be covered by a leak test that uses a sentinel value.
+- Observability: rejection reasons from `Log` (`ErrInvalidExtra`) and `TrustError.Reason` stay actionable and stable enough to match with `errors.Is`.
+- Reliability: no new test may depend on wall-clock time, a network, or a particular uid.

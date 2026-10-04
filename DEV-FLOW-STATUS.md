@@ -14,7 +14,7 @@
 | 1 | Create PRD | Complete |
 | 2 | Review PRD | Complete (Needs revision -> fixed) |
 | 3 | Create Spec (3 parallel workstreams: WS-A, WS-B, WS-C) | Complete |
-| 4 | Review Spec | Pending |
+| 4 | Review Spec | Complete (Needs revision -> fixed) |
 | 5 | Implement (WS-A auth/oktad, WS-B output+docgen, WS-C clock+audit+policy+httpx) | Pending |
 | 6 | Documentation, user-docs, ADRs, CHANGELOG, deferred, api-compat | Pending |
 | 7 | Code and Design Review | Pending |

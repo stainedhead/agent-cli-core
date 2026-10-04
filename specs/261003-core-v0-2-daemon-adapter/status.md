@@ -9,6 +9,6 @@ Created: 2026-10-03
 | Phase 2 integration | Not Started |
 | Phase 3 docs | Not Started |
 
-Phase 0: [x] spec created  [x] research questions identified  [x] phase files initialized
+Phase 0: [x] spec created  [x] spec reviewed (edge cases, owners, backward-compat check added)  [x] phase files initialized
 
 Blockers: none. Recent activity: spec created from PRD 2026-10-03.

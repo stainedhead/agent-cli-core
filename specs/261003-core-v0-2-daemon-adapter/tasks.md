@@ -3,7 +3,7 @@
 Created: 2026-10-03 | Status: Planning
 
 ## Progress Summary
-0/26 tasks complete. Workstreams are independent: each runs in its own worktree on a disjoint package set.
+0/25 tasks complete. Workstreams are independent: each runs in its own worktree on a disjoint package set.
 
 ## WS-A - auth/oktad + go.mod/go.sum (+ ADR text)
 - A1: Confirm `auth.DaemonClient` method set, `auth.NewToken`, `UnreachableError`/`ActionRequiredError`/`TokenError` field names; confirm `agent-okta-d` v0.1.0 resolves from the proxy. Deps: none. AC: notes in implementation-notes.

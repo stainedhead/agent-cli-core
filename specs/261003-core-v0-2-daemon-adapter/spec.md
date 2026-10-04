@@ -90,6 +90,22 @@ No breaking changes are permitted. Check procedure and per-item analysis:
 5. Consumers: CI `downstream` job builds and tests snow, outlook, teams against the PR core using a `replace` in a temporary go.work/go.mod (CI only, not committed); step 6.
 6. Semver: all of the above is a minor bump (v0.2.0, pre-1.0).
 
+## 8a. Edge Cases and Error Paths (added in spec review)
+- oktad: empty provider string -> `*auth.TokenError`-style validation error before any socket call (exit 1) [or pass through to daemon whose error maps; choose the former, D-A4]; zero-value `Client` (not via `New`) must not panic: methods return a general error; concurrent `Fetch`/`Refresh` from multiple goroutines is safe (the underlying client is; covered by a `-race` test); `Close` is idempotent; a `Credential` with empty `AccessToken` (`IsZero`) -> `ErrInvalidResponse`-equivalent general error, never an empty token; expired credential returned by daemon is returned as is (the TokenSource decides); `*APIError` with unknown status/code -> general error; wrapped errors (`fmt.Errorf("%w")`) still classified via `errors.As/Is`; socket path longer than the OS limit -> unreachable error naming the path (test uses short dirs only).
+- R1: empty token omitted; very long token is not truncated (opaque) but still counted in the byte budget.
+- R2: `Offset` beyond array length -> empty page, not truncated; empty array; array field is `null`; data is not an object (array/string) while `ArrayField` set -> usage error (D-B1) [consistent: existing array/string bounding is not applied]; single item larger than budget -> `ErrBoundTooSmall`; multi-byte UTF-8 inside items preserved (items are whole JSON values, never cut); nested `ArrayField` paths are NOT supported (top-level key only, documented).
+- R3: `nil` clock passed to `audit.WithClock` keeps current behaviour (system clock) rather than panicking [TBD verify in code]; `Fake.Sleep` honours context cancel; alias identity checked by a compile test using both import paths.
+- R4: empty `Subcommands` equals leaf; duplicate sibling names -> validation error; same name under different parents allowed; cycles impossible (value types); depth limit 4 exceeded -> validation error.
+- R5: nil `Extra`; key collisions with fixed JSON keys are impossible because `Extra` is nested under `extra`; value containing secrets (bearer-looking strings) is redacted; control characters/newlines in values escaped by JSON encoding (no log injection); more than 16 keys -> error (D-C1); concurrent `Log` calls remain serialised by the existing mutex.
+- R6: path not existing, directory instead of file, empty path, relative path (resolved to absolute first), symlink loops, file replaced between check and open (fstat on descriptor is authoritative), non-unix build -> fail closed; permission-denied on an ancestor -> error (fail closed); sticky world-writable ancestor like `/tmp` owned by root is rejected unless it is the file's own directory exception is NOT granted (strict, D-C5).
+- R7: hook panics are not recovered (documented; caller bug); body read error or timeout -> hook is not called, vendor code empty; body shorter than limit; non-UTF-8 bytes; empty body; hook returns very long or control-char string -> bounded to 64 bytes and scrubbed; body is drained/closed so connections are reused; hook applies to 403 only (D-C6: 401/429 keep their v0.1.0 typed errors without code); header `VendorCode` non-empty wins.
+
+## 8b. Owners and resolution path for open items
+All decisions D-* in section 12 are owned by the implementing workstream lead and recorded in `implementation-notes.md` when closed; D-C4 (Record comparability) must be closed first in WS-C (task C3) because it can change the R5 field shape; D-A3 (exit 3 vs 4) is confirmed by the maintainer at PR review. Unresolved [TBD] items must be closed or moved to `docs/deferred.md` before step 13.
+
+## 8c. Acceptance criteria to FR traceability
+AC1 -> FR-001..004 (A4-A8); AC2 -> FR-005..011 (B1-B6, C1-C6); AC3 -> section 8 and I2, CI downstream job; AC4 -> B7, C7, A8, I1; AC5 -> FR-012 and I3.
+
 ## 9. Success and Acceptance Criteria
 AC1..AC5 from the PRD. Quality gates: gofmt, go vet, golangci-lint, `go test -race -count=3 ./...`, coverage at least 90 percent on new code, apidiff additions only.
 
@@ -100,7 +116,7 @@ See PRD; plus RB-1 above, `okta` vs archtest vendor-name rule, `clienttest` expo
 M1 WS-A, WS-B, WS-C in parallel; M2 merge + integrate; M3 docs/ADR/CHANGELOG/deferred/api-compat; M4 review and PR. No tag.
 
 ## 12. Decisions Log (open until reviewed)
-D-A1 cancellation -> wrapped context error; D-A2 adapter-local TransientError (rate_limited, exit 8); D-A3 not-configured/unauthorized -> exit 3; D-B1 missing/non-array ArrayField -> usage error; D-B2 no separate OffsetBase; D-C1 invalid Extra keys rejected; D-C2 schema version stays 1; D-C3 no body prefix on error types; D-C4 resolve Record comparability.
+D-A1 cancellation -> wrapped context error; D-A2 adapter-local TransientError (rate_limited, exit 8); D-A3 not-configured/unauthorized -> exit 3; D-B1 missing/non-array ArrayField -> usage error; D-B2 no separate OffsetBase; D-C1 invalid Extra keys rejected; D-C2 schema version stays 1; D-C3 no body prefix on error types; D-C4 resolve Record comparability; D-A4 empty provider rejected locally; D-C5 strict ancestor rule; D-C6 vendor-code body hook applies to 403 only.
 
 ## 13. References
 - PRD: `specs/261003-core-v0-2-daemon-adapter/core-v0-2-daemon-adapter-PRD.md`

@@ -96,13 +96,19 @@ func (c *Client) get(ctx context.Context, provider string, call func(*client.Cli
 		return auth.Token{}, c.mapError(ctx, provider, err)
 	}
 	// The one place the token value is read.
-	return auth.NewToken(cred.AccessToken.Reveal()), nil
+	raw := cred.AccessToken.Reveal()
+	if raw == "" {
+		return auth.Token{}, errors.New("oktad: daemon returned an empty credential")
+	}
+	return auth.NewToken(raw), nil
 }
 
-// mapError classifies err; see the package documentation for the table.
+// mapError classifies err; see the package documentation for the table. A
+// context error wins only when ctx is done and err is itself a context error;
+// a daemon verdict that arrived before the caller cancelled keeps its class.
 func (c *Client) mapError(ctx context.Context, provider string, err error) error {
 	switch {
-	case ctx.Err() != nil:
+	case ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)):
 		return fmt.Errorf("oktad: %w", ctx.Err())
 	case errors.Is(err, client.ErrDaemonUnavailable):
 		return &auth.UnreachableError{Socket: c.c.SocketPath(), Err: err}

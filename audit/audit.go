@@ -67,7 +67,8 @@ type Record struct {
 	TargetRef string `json:"target_ref,omitempty"`
 	// Extra holds tool-specific metadata columns, for example a recipient
 	// count. It is bounded: at most MaxExtraKeys keys, each matching
-	// [a-z0-9_.-]{1,32}, each value cut to MaxExtraValueLen bytes. A record
+	// [a-z0-9_.-]{1,32} and none changed by the redaction pass (a key that
+	// is or contains a secret is rejected), each value cut to MaxExtraValueLen bytes. A record
 	// that breaks the key rules is not written (see ErrInvalidExtra). Values
 	// pass through the redaction pass. Extra must not carry content or
 	// credentials.
@@ -312,7 +313,7 @@ func (closedWriter) Write([]byte) (int, error) { return 0, os.ErrClosed }
 // record whose Extra breaks its rules is not written and also matches
 // ErrInvalidExtra.
 func (l *Logger) Log(rec Record) error {
-	if err := checkExtra(rec.Extra); err != nil {
+	if err := l.checkExtra(rec.Extra); err != nil {
 		return &WriteError{Err: err}
 	}
 	rec = l.sanitize(rec)
@@ -369,8 +370,10 @@ func (l *Logger) sanitize(r Record) Record {
 	return r
 }
 
-// checkExtra validates the count and key syntax of Extra.
-func checkExtra(extra *ExtraFields) error {
+// checkExtra validates the count and key syntax of Extra, and rejects any key
+// the redactor would change, so a secret used as a key is never written. The
+// errors never contain a key.
+func (l *Logger) checkExtra(extra *ExtraFields) error {
 	if extra == nil {
 		return nil
 	}
@@ -379,7 +382,10 @@ func checkExtra(extra *ExtraFields) error {
 	}
 	for k := range *extra {
 		if !validExtraKey(k) {
-			return fmt.Errorf("%w: key %q must match [a-z0-9_.-]{1,%d}", ErrInvalidExtra, capBytes(k, 40), MaxExtraKeyLen)
+			return fmt.Errorf("%w: a key must match [a-z0-9_.-]{1,%d}", ErrInvalidExtra, MaxExtraKeyLen)
+		}
+		if l.red.String(k) != k {
+			return fmt.Errorf("%w: a key matches a redaction rule", ErrInvalidExtra)
 		}
 	}
 	return nil

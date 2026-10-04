@@ -218,3 +218,49 @@ func TestMarshalDirectOmitsEmptyExtra(t *testing.T) {
 		t.Fatalf("%v %s", err, b)
 	}
 }
+
+func TestExtraKeyRedactionRejected(t *testing.T) {
+	const secret = "s3cretvalue0123456789abcdef"
+	cases := map[string]audit.ExtraFields{
+		"key equals secret":       {secret: "v"},
+		"key contains secret":     {"k." + secret: "v"},
+		"short key contains part": {"pre" + secret[:20]: "v"},
+	}
+	for name, extra := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := sample()
+			r.Extra = &extra
+			line, err := logOne(t, r, audit.WithSecrets(secret, secret[:20]))
+			if !errors.Is(err, audit.ErrInvalidExtra) || !errors.Is(err, audit.ErrWrite) {
+				t.Fatalf("err = %v", err)
+			}
+			if line != "" {
+				t.Fatalf("record written: %s", line)
+			}
+			for k := range extra {
+				if strings.Contains(err.Error(), k) || strings.Contains(err.Error(), secret[:20]) {
+					t.Fatalf("error leaks key: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestExtraKeySyntaxErrorOmitsKey(t *testing.T) {
+	const bad = "SECRETKEY-not-allowed"
+	r := sample()
+	r.Extra = &audit.ExtraFields{bad: "v"}
+	_, err := logOne(t, r)
+	if !errors.Is(err, audit.ErrInvalidExtra) || strings.Contains(err.Error(), bad) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestExtraKeyUnaffectedByUnrelatedSecrets(t *testing.T) {
+	r := sample()
+	r.Extra = &audit.ExtraFields{"recipient_count": "2"}
+	line, err := logOne(t, r, audit.WithSecrets("unrelated-secret-value"))
+	if err != nil || !strings.Contains(line, `"recipient_count":"2"`) {
+		t.Fatalf("line %q err %v", line, err)
+	}
+}

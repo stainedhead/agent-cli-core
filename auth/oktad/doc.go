@@ -25,7 +25,10 @@
 //	invalid response, empty provider, other          plain wrapped error       general       1
 //
 // A cancelled or expired caller context is reported as such and never as an
-// unreachable daemon. Exit 3 rather than 4 for not_configured and unauthorized:
+// unreachable daemon, but only when the failure is itself a context error: a
+// daemon verdict (for example revoked) that arrived before the caller
+// cancelled keeps its class. An empty credential from the daemon is a general
+// error. Exit 3 rather than 4 for not_configured and unauthorized:
 // exit 4 means a remote server refused a request, whereas these are problems
 // with the local credential setup that a human fixes.
 //

@@ -1,6 +1,6 @@
 # API compatibility: v0.2.0 against v0.1.0
 
-Result: **additions only. No source-incompatible change.** One symbol is reported as "incompatible" by `apidiff` (audit.WithClock); it is a false positive explained below. Verified on 2026-10-03 against branch `feat/core-v0.2`.
+Result: **additions only; the only source-level caveat is unkeyed composite literals of the four extended structs (`output.Meta`, `output.Bounds`, `docgen.Command`, `audit.Record`), none in this repo or in snow-cli, outlook-cli and teams-cli at the time of writing (checked 2026-10-04 by grep for unkeyed literals of those types in the three consumers and in this repo).** One symbol is reported as "incompatible" by `apidiff` (audit.WithClock); it is a false positive explained below. Verified on 2026-10-03 against branch `feat/core-v0.2`.
 
 ## Method
 

@@ -152,3 +152,28 @@ func ExampleCommand_subcommands() {
 	// ### mail
 	// #### mail send
 }
+
+func TestSiblingOrderUsesTrimmedNames(t *testing.T) {
+	gen := func(cmds []docgen.Command, nested bool) string {
+		tr := docgen.CommandTree{Name: "t", Commands: cmds}
+		if nested {
+			tr.Commands = []docgen.Command{{Name: "p", Subcommands: cmds}}
+		}
+		out, err := docgen.Generate(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	for _, nested := range []bool{false, true} {
+		x := gen([]docgen.Command{{Name: " b"}, {Name: "a"}}, nested)
+		y := gen([]docgen.Command{{Name: "a"}, {Name: " b"}}, nested)
+		if x != y {
+			t.Fatalf("output depends on input order (nested=%v)", nested)
+		}
+		ia, ib := strings.Index(x, " a\n"), strings.Index(x, " b\n")
+		if ia < 0 || ib < 0 || ia > ib {
+			t.Fatalf("a must precede b (nested=%v):\n%s", nested, x)
+		}
+	}
+}

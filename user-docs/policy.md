@@ -86,7 +86,8 @@ err := policy.CheckTrustedFile("/etc/mytool/policy.yaml", policy.WithTrustedUIDs
 
 - Trusted owners are root and any uid given to `WithTrustedUIDs`. The effective uid of the running process is not trusted unless it is root: passing it returns an error, because the agent's own user could rewrite its own file.
 - Every directory on the way, including `/`, must be owned by a trusted uid and must not be group or world writable. Symlinks are followed by the check itself and each link must also be owned by a trusted uid (at most 40 hops). A sticky world-writable directory such as `/tmp` is rejected.
-- The file itself must be a regular file, owned by a trusted uid, and not group or world writable. It is opened without following links and re-checked on the open descriptor, so a swap between check and use fails.
+- The file itself must be a regular file, owned by a trusted uid, and not group or world writable. It is opened without following links and re-checked on the open descriptor, which catches a swap between the walk and that open.
+- What this guarantees: at check time no untrusted user could have written the file or any directory on its resolved path, and none can change it afterwards unless a trusted user or root does. The function returns only an error, no descriptor: your code opens the path again afterwards, and the safety of that second open rests on the ancestors being trusted and not writable, not on the check. POSIX ACLs and extended attributes are not examined, only owner and mode bits.
 - It fails closed: a missing file, a directory you cannot read, or a platform without this check (anything but Unix) returns an error.
 - The error is a `*policy.TrustError{Path, Reason, Err}` that matches `errors.Is(err, policy.ErrNotTrusted)`, carries a hint, and maps to category `policy_denied` (exit 6).
 

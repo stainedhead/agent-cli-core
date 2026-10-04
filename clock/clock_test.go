@@ -51,10 +51,8 @@ func TestFakeSleepWakesOnAdvance(t *testing.T) {
 	go func() { done <- f.Sleep(context.Background(), time.Minute) }()
 	f.BlockUntil(1)
 	f.Advance(30 * time.Second)
-	select {
-	case <-done:
-		t.Fatal("woke too early")
-	case <-time.After(20 * time.Millisecond):
+	if n := f.Waiters(); n != 1 {
+		t.Fatalf("sleeper must still be waiting after half the duration, waiters=%d", n)
 	}
 	f.Advance(30 * time.Second)
 	if err := <-done; err != nil {

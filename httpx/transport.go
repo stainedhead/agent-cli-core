@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/stainedhead/agent-cli-core/internal/redact"
 )
@@ -140,8 +142,9 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 			continue
 		case http.StatusForbidden:
+			err := t.forbidden(resp, held)
 			drain(resp)
-			return nil, t.forbidden(resp, held)
+			return nil, err
 		case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 			wait := t.cfg.backoff(attempt - 1)
 			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
@@ -223,7 +226,46 @@ func (t *Transport) forbidden(resp *http.Response, held []string) error {
 		}
 		e.VendorCode = code
 	}
+	if e.VendorCode == "" && t.cfg.VendorCodeFromBody != nil {
+		e.VendorCode = t.bodyVendorCode(resp, held)
+	}
 	return e
+}
+
+// bodyVendorCode offers a bounded prefix of the response body to the
+// VendorCodeFromBody hook and cleans the result. It returns "" if the body
+// cannot be read.
+func (t *Transport) bodyVendorCode(resp *http.Response, held []string) string {
+	var prefix []byte
+	if resp.Body != nil {
+		limit := t.cfg.VendorBodyLimit
+		switch {
+		case limit <= 0:
+			limit = DefaultVendorBodyLimit
+		case limit > MaxVendorBodyLimit:
+			limit = MaxVendorBodyLimit
+		}
+		var err error
+		prefix, err = io.ReadAll(io.LimitReader(resp.Body, int64(limit)))
+		if err != nil {
+			return ""
+		}
+	}
+	code := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, t.cfg.VendorCodeFromBody(resp.StatusCode, prefix))
+	code = t.scrub(strings.TrimSpace(code), held)
+	if len(code) > maxVendorCode {
+		cut := maxVendorCode
+		for cut > 0 && !utf8.RuneStart(code[cut]) {
+			cut--
+		}
+		code = code[:cut]
+	}
+	return code
 }
 
 // drain discards and closes a response body so the connection can be reused.

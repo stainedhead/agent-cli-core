@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/stainedhead/agent-cli-core/output"
 )
 
 // TokenSource yields the current bearer token. A tool may supply its own
@@ -94,6 +96,13 @@ func (s *DaemonTokenSource) result(t Token, err error, op string) (Token, error)
 		return Token{}, &ActionRequiredError{Provider: s.provider, Err: ErrReauthRequired, Remediation: s.remediation}
 	case errors.Is(err, ErrRevoked):
 		return Token{}, &ActionRequiredError{Provider: s.provider, Err: ErrRevoked, Remediation: s.remediation}
+	}
+	// An error that already carries a category (the adapter's own typed
+	// errors, for example) keeps it, with its hint and cause chain, so the
+	// exit code and hint reach the caller unchanged.
+	var ce output.CategoryError
+	if errors.As(err, &ce) {
+		return Token{}, &categorizedError{err: err}
 	}
 	return Token{}, &TokenError{Provider: s.provider, Op: op, Err: err}
 }

@@ -120,3 +120,23 @@ func (e *TokenError) Unwrap() error { return e.Err }
 func (*TokenError) Category() output.Category { return output.CategoryAuth }
 
 func scrub(s string) string { return redact.New().String(s) }
+
+// categorizedError passes an error that already has a category through
+// DaemonTokenSource. The category, the hint and errors.As/Is on the cause all
+// work as on the original; the message and hint are scrubbed of secrets, the
+// same guarantee TokenError gives.
+type categorizedError struct{ err error }
+
+func (e *categorizedError) Error() string { return scrub(e.err.Error()) }
+
+func (e *categorizedError) Unwrap() error { return e.err }
+
+func (e *categorizedError) Category() output.Category { return output.CategoryOf(e.err) }
+
+func (e *categorizedError) Hint() string {
+	var h output.Hinter
+	if errors.As(e.err, &h) {
+		return scrub(h.Hint())
+	}
+	return ""
+}

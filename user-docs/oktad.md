@@ -47,6 +47,8 @@ Failures land in the existing categories; there is no new exit code.
 | Provider not configured in the daemon, or this caller not authorized | `*oktad.AccessError` | 3 |
 | Invalid response, other errors | plain wrapped error | 1 |
 
+Through `auth.DaemonTokenSource` (how a CLI uses the adapter) the exit codes above hold for every row that has its own category: `*oktad.TransientError` stays exit 8 with its retry hint and `*oktad.AccessError` stays exit 3 with its hint. The two rows with no category (cancelled context, other errors) are wrapped by the token source in `*auth.TokenError`, exit 3.
+
 Not-configured and unauthorized are exit 3, not 4: they are local setup problems that a human fixes, whereas exit 4 means a remote server refused a request.
 
 ### Retry hints

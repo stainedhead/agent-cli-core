@@ -40,6 +40,10 @@
 // tells the caller where to resume (an item index for arrays, a byte offset
 // for strings) through Bounds.Offset.
 //
+// Object data is not cut unless Bounds.ArrayField names a top-level array in
+// it: the array is then bounded like array data and every other field is kept.
+// Meta.NextPageToken carries an upstream opaque continuation token.
+//
 // # Redaction
 //
 // Write scrubs error messages and hints with the shared redactor so they

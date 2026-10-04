@@ -32,6 +32,14 @@ type Meta struct {
 	Count int `json:"count"`
 	// RequestID identifies the request for support; omitted when empty.
 	RequestID string `json:"request_id,omitempty"`
+	// NextPageToken is an opaque continuation token from the upstream service
+	// (for example a Microsoft Graph skip token or delta link), omitted when
+	// empty. Write passes it through unchanged and counts it in the byte
+	// budget; it is never truncated. It is the caller's responsibility to
+	// supply a value that is not a secret. When Truncated is true the page was
+	// cut before the end of what the service returned: resume with NextOffset
+	// first, and use the token only after a page with Truncated false.
+	NextPageToken string `json:"next_page_token,omitempty"`
 }
 
 // Error is the payload of a failure envelope.

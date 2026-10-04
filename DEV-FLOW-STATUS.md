@@ -1,7 +1,7 @@
 # Dev-Flow Implementation Status
 
 **PRD:** core-v0-2-daemon-adapter-PRD.md
-**Spec:** (pending)
+**Spec:** specs/261003-core-v0-2-daemon-adapter
 **Branch:** feat/core-v0.2
 **Process Start:** 2026-10-03
 **Process End:** -
@@ -13,7 +13,7 @@
 |------|------|--------|
 | 1 | Create PRD | Complete |
 | 2 | Review PRD | Complete (Needs revision -> fixed) |
-| 3 | Create Spec (3 parallel workstreams: WS-A, WS-B, WS-C) | Pending |
+| 3 | Create Spec (3 parallel workstreams: WS-A, WS-B, WS-C) | Complete |
 | 4 | Review Spec | Pending |
 | 5 | Implement (WS-A auth/oktad, WS-B output+docgen, WS-C clock+audit+policy+httpx) | Pending |
 | 6 | Documentation, user-docs, ADRs, CHANGELOG, deferred, api-compat | Pending |

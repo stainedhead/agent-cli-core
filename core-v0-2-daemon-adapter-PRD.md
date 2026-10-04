@@ -67,13 +67,23 @@ Choice of types for the transient and not-configured/unauthorized rows uses exis
 
 **FR-012 (docs):** Update `docs/technical-details.md`, user-docs, new ADRs (adapter error mapping, one per new API), this PRD (milestone M0a done; fix text saying the adapter is deferred, including AGENTS.md, README and INTENT), `CHANGELOG.md` (v0.2.0 Unreleased), `docs/deferred.md`, `docs/api-compat-v0.2.md`. Verification of outlook 10/11/12 and teams 10/11/12 recorded if cheap. Done after implementation (dev-flow step 6).
 
+## Per-requirement testable criteria (added in PRD review)
+
+- R1: marshalling an envelope with `NextPageToken` set emits `meta.next_page_token`; unset emits byte-identical v0.1.0 golden output.
+- R2: with `Bounds` naming `items`, an object whose JSON exceeds the byte limit is trimmed to fit, valid UTF-8/JSON, `meta.truncated=true` and `meta.next_offset` = number of retained items; a missing or non-array field returns a documented error (not a panic); unset keeps v0.1.0 behaviour (`ErrBoundTooSmall`).
+- R3: a manual clock injected into audit, policy rate limiting and httpx retry drives time with no real sleeping; a v0.1.0-style `clock.Clock` value (internal) still satisfies the option parameter types.
+- R4: a two-level tree renders children under parents in deterministic order and the output is byte-identical across runs; a flat-only tree renders byte-identical to v0.1.0.
+- R5: a record with `Extra`, `RuleID`, `TargetRef` emits those keys, secrets in values are redacted, value count and size are bounded (limits [TBD] in spec); a record without them is byte-identical to v0.1.0.
+- R6: table tests (temp files) for wrong owner, group/world-writable, symlink, symlinked ancestor, trusted-uid match/mismatch, TOCTOU via fstat on the opened descriptor; effective uid is never consulted; `policy.Load` tests unchanged.
+- R7: a hook returning a vendor code from a body prefix larger than the bound sees only the bound; 403 error exposes the code; header-only `VendorCode` configs unchanged.
+
 ## Non-Functional Requirements
 
 - **Compatibility:** apidiff vs v0.1.0 reports only additions; existing tests unchanged and green; CI `downstream` job (snow/outlook/teams against the PR core) passes.
 - **Security:** token never in errors, logs or `fmt` of any type (fuzz/noleak style test extended to `oktad`); no fallback credentials; no new CI secrets (GITHUB_TOKEN only); no bodies in audit or errors.
 - **Reliability / portability:** adapter tests use the real client against `clienttest` over a real unix socket under a SHORT temp dir (`os.MkdirTemp("", "ocd")`, macOS 104-byte limit); no macOS-only assumptions; no timing-dependent assertions; `go test -race -count=3 ./...` passes on Linux CI.
 - **Quality:** gofmt, go vet, golangci-lint clean; at least 90% coverage on new code; Go doc comments and runnable `Example` on each new API; dependency-rule test (no vendor names) still passes.
-- **Observability:** adapter errors carry the socket path (not secrets) and retry-after where known.
+- **Observability:** adapter errors carry the socket path (not secrets) and retry-after where known; the adapter emits no log output of its own; audit extension fields make rule id and target visible per record. Performance: no extra goroutines or background work in the adapter; one request per Fetch/Refresh.
 
 ## Acceptance Criteria
 
@@ -114,6 +124,8 @@ Choice of types for the transient and not-configured/unauthorized rows uses exis
 | Cross-process rate limit state deferred | Risk | Consumers keep workarounds; flagged in `docs/deferred.md` |
 
 ## Open Questions
+
+Recommended defaults (to be confirmed in the spec and ADRs, not yet decisions): not-configured/unauthorized -> auth category (exit 3, hint names the human action); transient -> adapter-local error type implementing `output.CategoryError` with category rate_limited (avoids an `auth` -> `httpx` dependency); cancellation -> wrapped context error, category general; public clock in a new top-level `clock` package with `internal/clock` kept as a thin alias or compatible interface; `RuleID` and `TargetRef` as typed omitempty fields.
 
 - [TBD] Category for `ErrNotConfigured`/`ErrUnauthorized`: auth (3) vs forbidden (4) per core PRD.
 - [TBD] Transient error type for `ErrDegraded`/retry-after: new type in `auth/oktad` implementing `output.CategoryError` (rate_limited) vs reuse `httpx.RateLimitedError`; avoid an `auth` -> `httpx` import cycle.

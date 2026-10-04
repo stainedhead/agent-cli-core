@@ -20,7 +20,7 @@
 | 7 | Code and Design Review | Complete |
 | 8 | Prepare Review PRD | Complete |
 | 9 | Archive Original Spec | Complete |
-| 10 | Review Fixes Spec | Pending |
+| 10 | Review Fixes Spec | Complete (specs/261004-core-v0-2-daemon-adapter-auto-review) |
 | 11 | Implement Review Fixes | Pending |
 | 12 | Archive Fixes Spec | Pending |
 | 13 | Final Quality Pass | Pending |

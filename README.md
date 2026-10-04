@@ -101,3 +101,7 @@ make vuln       # govulncheck (needs network)
 ```
 
 There is no `make build`: this is a library.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

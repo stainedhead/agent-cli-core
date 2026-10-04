@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0 - Unreleased (tag pending)
+## v0.2.0 - 2026-10-04
 
 ### Added
 - auth/oktad: new package, an `auth.DaemonClient` over the credential daemon's Go client (`New`, `WithSocketPath`, `WithTimeout`, `Fetch`, `Refresh`, `SocketPath`, `Close`). Failures map to existing categories: unreachable, reauth and revoked are exit 3; `*oktad.TransientError` (degraded or retry-hinted, `RetryAfter()`) is exit 8; `*oktad.AccessError` (not configured, unauthorized) is exit 3; a cancelled caller context is reported as such.

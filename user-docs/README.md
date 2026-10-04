@@ -18,6 +18,8 @@ Module path: `github.com/stainedhead/agent-cli-core`. Requires Go 1.27. Supporte
 |---|---|
 | `output` | [output.md](output.md) - envelope, exit codes, untrusted content, bounds |
 | `auth` and `auth/authtest` | [auth.md](auth.md) - token source, authorizer, fakes |
+| `auth/oktad` | [oktad.md](oktad.md) - adapter over the credential daemon (v0.2.0) |
+| `clock` | [clock.md](clock.md) - injectable clock with a fake (v0.2.0) |
 | `policy` | [policy.md](policy.md) - guardrail policy |
 | `audit` | [audit.md](audit.md) - JSONL audit log |
 | `httpx` | [httpx.md](httpx.md) - retrying HTTP client |
@@ -26,7 +28,7 @@ Module path: `github.com/stainedhead/agent-cli-core`. Requires Go 1.27. Supporte
 
 ## Adding the dependency
 
-No version is tagged yet, so there is nothing to add today. When a release exists, depend on it at a released semver tag:
+No version is tagged yet, so there is nothing to add today. The pending release is `v0.2.0` (unreleased until the tag is cut); it adds the daemon adapter `auth/oktad`, which brings `github.com/stainedhead/agent-okta-d` v0.1.0 into your module graph. When it is tagged, depend on it at a released semver tag:
 
 ```
 go get github.com/stainedhead/agent-cli-core@vX.Y.Z
@@ -44,8 +46,8 @@ Some behavior rests on assumptions that are not yet confirmed, and some features
 
 ### Assumptions not yet confirmed
 
-- The Go API of the credential daemon's own client, and how it signals "re-enrollment needed", is unconfirmed. The library therefore defines its own `auth.DaemonClient` interface; you (or a later adapter) implement it.
-- The 401 and refresh behavior of the fake daemon models the intended daemon semantics; it has not been verified against a real daemon.
+- The library defines its own `auth.DaemonClient` interface; the adapter `auth/oktad` (v0.2.0) implements it over the daemon's client v0.1.0. The adapter is tested against the daemon module's fake server, not a live daemon.
+- The 401 and refresh behavior of the `auth/authtest` fake models the intended daemon semantics; it has not been verified against a real daemon.
 - That one policy schema suits every tool is assumed, not verified. The library ships a generic schema and no tool-specific sample policies.
 - Audit failure default: the library default is `warn`. A "block on write operations" default was proposed; because the library cannot tell reads from writes, your tool chooses the mode per Logger.
 - The exit code of a failing self-test matrix is `1` (proposed).
@@ -58,7 +60,6 @@ Some behavior rests on assumptions that are not yet confirmed, and some features
 | Not built | Why | What to do meanwhile |
 |---|---|---|
 | Human-mode login (browser PKCE, OS keychain) | Belongs in the tool that needs it | Implement `auth.TokenSource` (add `Refresh(ctx) (auth.Token, error)` for forced refresh) |
-| Adapter over the credential daemon's client | That module has no tagged release and its API is unconfirmed | Write a small type implementing `auth.DaemonClient` |
 | Conformance test kit | Needs real consumers to define it | Use `auth/authtest` and the examples |
 | API-compatibility check in CI | No earlier release to compare with; policy undecided | Read the release notes on upgrade |
 | Release automation (tagging, SBOM, signing) | No tag or consumer exists yet | None |

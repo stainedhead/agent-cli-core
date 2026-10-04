@@ -76,12 +76,27 @@ Unknown keys, duplicate keys, an empty file, a wrong `version`, duplicate rule i
 
 `Load` checks whether the current user can write the policy file or its directory. The default adds a warning to `p.Warnings()`; `WithWritable(policy.WritableRefuse)` returns a `*policy.WritableError` instead; `WritableIgnore` skips the check. The check does nothing on non-POSIX platforms.
 
+## Trusted file check (v0.2.0)
+
+`policy.CheckTrustedFile(path, opts...)` checks that a file (a policy, or any config you refuse to trust unless protected) can only be changed by trusted users. It is separate from `Load`, which is unchanged.
+
+```go
+err := policy.CheckTrustedFile("/etc/mytool/policy.yaml", policy.WithTrustedUIDs(1001))
+```
+
+- Trusted owners are root and any uid given to `WithTrustedUIDs`. The effective uid of the running process is not trusted unless it is root: passing it returns an error, because the agent's own user could rewrite its own file.
+- Every directory on the way, including `/`, must be owned by a trusted uid and must not be group or world writable. Symlinks are followed by the check itself and each link must also be owned by a trusted uid (at most 40 hops). A sticky world-writable directory such as `/tmp` is rejected.
+- The file itself must be a regular file, owned by a trusted uid, and not group or world writable. It is opened without following links and re-checked on the open descriptor, so a swap between check and use fails.
+- It fails closed: a missing file, a directory you cannot read, or a platform without this check (anything but Unix) returns an error.
+- The error is a `*policy.TrustError{Path, Reason, Err}` that matches `errors.Is(err, policy.ErrNotTrusted)`, carries a hint, and maps to category `policy_denied` (exit 6).
+
 ## Testing your tool
 
-`NewEngine` takes any value with a `Now() time.Time` method, so tests can pass a fake clock and step time without sleeping.
+`NewEngine` takes any value with a `Now() time.Time` method, so tests can pass a [`clock.Fake`](clock.md) and step time without sleeping.
 
 ## Troubleshooting
 
 - "no rule allows ...": add an allow rule; unmatched requests are denied by design.
 - "field ... is not in the allowlist": add the field to `fields` or stop sending it.
+- `is not a trusted file: ...` (`policy.TrustError`): the reason says what failed; fix the owner or mode of the file or of a directory above it, or move the file to a root-owned directory.
 - Rate-limit denial: `Decision.RetryAfter` says how long until the hourly window admits the request (zero for a per-run limit).

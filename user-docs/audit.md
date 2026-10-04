@@ -23,7 +23,25 @@ err = l.Handle(audit.Record{
 
 ## Record fields
 
-`schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`. `ts` is UTC and filled from the clock when you leave it zero. `duration` is a Go duration string such as `1.5s`. There is no field for a body or a credential. Every text field is passed through the redaction pass and capped at 512 bytes. Register known secrets with `audit.WithSecrets(...)`.
+`schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`, and the optional v0.2.0 fields `rule_id, target_ref, extra` (see below). `ts` is UTC and filled from the clock when you leave it zero. `duration` is a Go duration string such as `1.5s`. There is no field for a body or a credential. Every text field is passed through the redaction pass and capped at 512 bytes. Register known secrets with `audit.WithSecrets(...)`.
+
+## Optional fields (v0.2.0)
+
+| Field | Go field | Meaning |
+|---|---|---|
+| `rule_id` | `RuleID` | The policy rule that decided, for example `Decision.RuleID` |
+| `target_ref` | `TargetRef` | A reference to the object acted on |
+| `extra` | `Extra *audit.ExtraFields` | Small string map for tool-specific facts |
+
+All three are left out of the line when empty, the schema version stays `1`, and a record that does not use them is byte-identical to v0.1.0. Readers should ignore keys they do not know. `RuleID` and `TargetRef` are redacted and capped at 512 bytes like the other text fields.
+
+`Extra` is a pointer to a named map type so that `audit.Record` stays comparable with `==`: write `Extra: &audit.ExtraFields{"batch": "7"}`. Limits:
+
+- at most `audit.MaxExtraKeys` (16) keys;
+- each key matches `[a-z0-9_.-]{1,32}`;
+- each value is redacted and cut to `audit.MaxExtraValueLen` (256) bytes on a character boundary;
+- a record that breaks the key rules is not written, and `Log` returns a `*audit.WriteError` that matches both `audit.ErrWrite` and `audit.ErrInvalidExtra` (so `block` mode fails the command);
+- your map is never changed, and keys are written in sorted order.
 
 ## Configuration
 
@@ -41,9 +59,10 @@ Choose `block` for write operations that must not go unrecorded. If the command 
 
 ## Notes
 
-The `Logger` is safe for concurrent use; each record is one atomic line. Inject a clock with `WithClock` in tests.
+The `Logger` is safe for concurrent use; each record is one atomic line. Inject a [clock](clock.md) with `WithClock` in tests (a nil clock keeps the system clock).
 
 ## Troubleshooting
 
 - `audit: no log path configured`: set `path`.
+- `audit: invalid extra field` (`audit.ErrInvalidExtra`): too many keys or a key outside `[a-z0-9_.-]{1,32}`.
 - `audit: open log`: check the directory is writable by the user running the CLI.

@@ -16,13 +16,13 @@ Created: 2026-10-03 | Status: Planning
 - A8: Coverage at least 90 percent, race count=3 on `./auth/...`. Deps: A6.
 
 ## WS-B - output (R1, R2) + docgen (R4)
-- B1: Tests first R1: Meta.NextPageToken marshal + golden unchanged when unset. 
-- B2: Implement R1 (+ text/table rendering rule); Example. Deps: B1.
-- B3: Tests first R2: ArrayField trimming, Offset, UTF-8/JSON validity, missing/non-array field, too-small, unset == v0.1.0.
-- B4: Implement R2; Example; document the offset semantics. Deps: B3.
-- B5: Tests first R4: nested rendering, ordering, sibling uniqueness, flat golden unchanged, depth limit.
-- B6: Implement R4 (`Command.Subcommands`); Example. Deps: B5.
-- B7: Coverage at least 90 percent, race count=3 on `./output/... ./docgen/...`.
+- [x] B1: Tests first R1: Meta.NextPageToken marshal + golden unchanged when unset. 
+- [x] B2: Implement R1 (+ text/table rendering rule); Example. Deps: B1.
+- [x] B3: Tests first R2: ArrayField trimming, Offset, UTF-8/JSON validity, missing/non-array field, too-small, unset == v0.1.0.
+- [x] B4: Implement R2; Example; document the offset semantics. Deps: B3.
+- [x] B5: Tests first R4: nested rendering, ordering, sibling uniqueness, flat golden unchanged, depth limit.
+- [x] B6: Implement R4 (`Command.Subcommands`); Example. Deps: B5.
+- [x] B7: Coverage at least 90 percent, race count=3 on `./output/... ./docgen/...`.
 
 ## WS-C - clock (R3), audit (R5), policy (R6), httpx (R7)
 - C1: New `clock` package (promote from internal/clock) with tests moved/copied; internal/clock aliases; existing internal tests green. archtest entry. Example.

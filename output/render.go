@@ -32,6 +32,9 @@ func metaLine(m Meta, isArray bool) string {
 	if m.RequestID != "" {
 		parts = append(parts, "request_id="+oneLine(m.RequestID))
 	}
+	if m.NextPageToken != "" {
+		parts = append(parts, "next_page_token="+oneLine(m.NextPageToken))
+	}
 	return "-- " + strings.Join(parts, " ")
 }
 

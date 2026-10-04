@@ -78,7 +78,7 @@ func Generate(tree CommandTree) ([]byte, error) {
 		return nil, err
 	}
 	cmds := append([]Command(nil), tree.Commands...)
-	sort.Slice(cmds, func(i, j int) bool { return cmds[i].Name < cmds[j].Name })
+	sortByName(cmds)
 
 	var b strings.Builder
 	desc := oneLine(tree.Description)
@@ -154,7 +154,7 @@ func writeTree(b *strings.Builder, c Command, parent string, level int) {
 	path := join(parent, strings.TrimSpace(c.Name))
 	writeCommand(b, c, path, level)
 	subs := append([]Command(nil), c.Subcommands...)
-	sort.Slice(subs, func(i, j int) bool { return subs[i].Name < subs[j].Name })
+	sortByName(subs)
 	for _, sc := range subs {
 		writeTree(b, sc, path, level+1)
 	}
@@ -279,4 +279,12 @@ func fenced(s string) string {
 	}
 	fence := strings.Repeat("`", max(3, longest+1))
 	return fence + "\n" + s + "\n" + fence + "\n"
+}
+
+// sortByName orders siblings by their trimmed name, the same form the
+// uniqueness check compares, so the output does not depend on input order.
+func sortByName(cmds []Command) {
+	sort.SliceStable(cmds, func(i, j int) bool {
+		return strings.TrimSpace(cmds[i].Name) < strings.TrimSpace(cmds[j].Name)
+	})
 }

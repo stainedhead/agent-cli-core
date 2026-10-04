@@ -14,15 +14,35 @@ import (
 // temp dir is sticky and world-writable, which the check rejects), and
 // pretends the process runs as a different user so that the current uid can
 // play the trusted owner. It works as a non-root user on Linux and macOS.
+// openStatDir returns a writable scratch directory anywhere on disk. openStat
+// does not walk ancestors, so it needs no clean home chain and the O_NOFOLLOW
+// and SameFile paths are exercised on every runner.
+func openStatDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "ocd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	return d
+}
+
+// skipRealFS skips the test and says so loudly in the log, so a CI runner whose
+// home chain is unsuitable shows up as a visible skip rather than silence.
+func skipRealFS(t *testing.T, format string, args ...any) {
+	t.Helper()
+	t.Skipf("SKIPPED real-filesystem trust test: "+format, args...)
+}
+
 func realDir(t *testing.T) (string, trustConfig) {
 	t.Helper()
 	home, err := os.UserHomeDir()
 	if err != nil {
-		t.Skip("no home directory")
+		skipRealFS(t, "no home directory")
 	}
 	d, err := os.MkdirTemp(home, ".trusttest-*")
 	if err != nil {
-		t.Skipf("cannot create scratch dir under home: %v", err)
+		skipRealFS(t, "cannot create scratch dir under home: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(d) })
 	d, err = filepath.EvalSymlinks(d)
@@ -36,7 +56,7 @@ func realDir(t *testing.T) (string, trustConfig) {
 		t.Fatal(err)
 	}
 	if err := checkTrustedFile(probe, cfg); err != nil {
-		t.Skipf("home directory chain is not clean enough for real-filesystem tests: %v", err)
+		skipRealFS(t, "home directory chain is not clean enough: %v", err)
 	}
 	return d, cfg
 }
@@ -121,7 +141,7 @@ func TestRealFilesystem(t *testing.T) {
 }
 
 func TestOSTrustFSOpenStat(t *testing.T) {
-	d, _ := realDir(t)
+	d := openStatDir(t)
 	p := filepath.Join(d, "f")
 	if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
@@ -153,7 +173,7 @@ func TestOSTrustFSOpenUnreadable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads anything")
 	}
-	d, _ := realDir(t)
+	d := openStatDir(t)
 	p := filepath.Join(d, "f")
 	if err := os.WriteFile(p, []byte("x"), 0o000); err != nil {
 		t.Fatal(err)

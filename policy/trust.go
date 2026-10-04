@@ -87,7 +87,16 @@ func newTrustConfig(opts []TrustOption) trustConfig {
 // whole resolved path is verified. The file is then opened with O_NOFOLLOW and
 // the checks of record (regular file, trusted owner, not group or world
 // writable) are made with fstat on the open descriptor, so a file swapped in
-// after the walk is still caught.
+// between the walk and that open is caught.
+//
+// What this guarantees: at check time no untrusted user could have written the
+// file or any directory on its resolved path, and none can change it
+// afterwards unless a trusted user or root does. What it does not do: the
+// function opens, checks and closes the file and returns only an error, no
+// descriptor, so the caller's own later open of the path is not covered by the
+// descriptor check; safety after the check rests on the trusted, non-writable
+// ancestors. POSIX ACLs and extended attributes are not examined, only owner
+// and mode bits.
 //
 // Any failure, including a missing file, a permission error or a platform
 // without POSIX ownership, returns a *TrustError (never nil): the check fails

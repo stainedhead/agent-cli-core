@@ -14,7 +14,7 @@
 - user-docs: oktad adapter guide, clock guide, and sections for each new API; ADR-16 to ADR-18.
 
 ### Changed
-- Adding fields to `output.Meta`, `output.Bounds`, `docgen.Command` and `audit.Record` breaks unkeyed struct literals of those types; use keyed literals.
+- Source caveat: adding fields to `output.Meta`, `output.Bounds`, `docgen.Command` and `audit.Record` breaks unkeyed composite literals of those types; use keyed literals. None exist in this repo or in snow-cli, outlook-cli and teams-cli at the time of writing (checked by grep). Otherwise v0.2.0 is additions only.
 - The adapter is no longer deferred (milestone M0a done). `go.mod` now requires `agent-okta-d` v0.1.0, so consumers gain it in their module graph.
 
 ### Dependencies

@@ -249,7 +249,7 @@ Supported: darwin/arm64, linux/amd64, linux/arm64, built with `CGO_ENABLED=0`. N
 ## Build, test and CI
 
 - Gate: `gofmt -l .` empty, `go vet ./...`, `golangci-lint run`, `go test -race ./...`, `go mod tidy` leaves no diff, cross-compile for the three targets, `govulncheck`. `make check` runs the local part; `make cross`, `make vuln`, `make fuzz` and `make tidy-check` run the rest individually.
-- `.github/workflows/ci.yml` runs on pull requests and manual dispatch only, with read-only permissions and no secrets. There is no release, publish or deploy job.
+- `.github/workflows/ci.yml` runs on pull requests and manual dispatch only, with read-only permissions and no secrets. There is no release, publish or deploy job. The `downstream` job (matrix: snow-cli, outlook-cli, teams-cli, all public) checks out each consumer's `main` next to this pull request's core, links them with a `go.work` file (the consumer's `go.mod` is not edited, so its no-replace guard tests still run) and runs build, vet and `go test -race`; it verifies backward compatibility.
 - Tests: golden files for the envelope, exit codes, audit schema, selftest output and generated skill document; `internal/archtest` (import graph, cycles, allowed third-party modules, no vendor names); `internal/integration` (end-to-end flow through `examples/sampletool`, and a fuzz/property test that no token value appears in any envelope, error, trace or audit line).
 - `examples/sampletool` is a vendor-neutral sample tool showing the order policy, auth, httpx, output, audit. It is documentation that compiles and is tested, not API.
 
@@ -276,7 +276,7 @@ Deferred (not built), with rationale:
 | Human-mode login (browser PKCE, OS keychain) `TokenSource` | Decided to live in `snow-cli`; the `TokenSource` interface already allows it |
 | Conformance test kit | Needs real consumers to define it; revisit once a release is adopted |
 | `apidiff` / `gorelease` in CI | No earlier release to compare with; blocking-versus-advisory is undecided |
-| Release workflows: tagging, GitHub Release, SBOM, provenance, signing, downstream compatibility build | No consumer code and no tag exist; CI is verify-only |
+| Release workflows: tagging, GitHub Release, SBOM, provenance, signing (the pull-request `downstream` compatibility job exists) | No consumer code and no tag exist; CI is verify-only |
 | Policy file signature check (CORE-POL-7, P2) | Lower priority |
 | Native Windows support | Out of scope; WSL2 uses the Linux build |
 | Pinning CI actions to commit SHAs | Needs network lookups; actions are pinned to release tags |

@@ -60,6 +60,12 @@ type Rules struct {
 	// VendorNames are case-insensitive substrings that must not appear in an
 	// import path, an identifier or a file path.
 	VendorNames []string
+	// VendorExempt lists package directories (relative to the module root)
+	// whose subtree is exempt from the vendor-name rule: the directory and
+	// file names, identifiers and import paths there may contain a vendor
+	// name. It is for edge adapters that must name the daemon they wrap. The
+	// import allow-lists (Allowed, External) still apply to them.
+	VendorExempt []string
 }
 
 // DefaultRules returns the rules of this repository (see the architecture
@@ -74,18 +80,23 @@ func DefaultRules() Rules {
 			"httpx":           {"output", "internal/redact", "internal/clock"},
 			"auth":            {"output", "internal/redact", "internal/clock"},
 			"auth/authtest":   {"auth", "output", "internal/clock"},
+			"auth/oktad":      {"auth", "output"},
 			"policy":          {},
 			"audit":           {"internal/redact", "internal/clock"},
 			"selftest":        {"output"},
 			"docgen":          {"output"},
 		},
 		External: map[string][]string{
-			"policy": {"github.com/goccy/go-yaml"},
+			"policy":     {"github.com/goccy/go-yaml"},
+			"auth/oktad": {"github.com/stainedhead/agent-okta-d/pkg/client"},
 		},
 		VendorNames: []string{
 			"snow", "servicenow", "outlook", "teams", "okta", "msgraph",
 			"microsoft", "office365", "sharepoint", "azuread",
 		},
+		// auth/oktad is the one adapter over the credential daemon's client;
+		// it has to name the daemon.
+		VendorExempt: []string{"auth/oktad"},
 	}
 }
 
@@ -109,7 +120,7 @@ func Check(fsys fs.FS, r Rules) []Violation {
 			if p != "." && (strings.HasPrefix(name, ".") || name == "testdata" || name == "vendor") {
 				return fs.SkipDir
 			}
-			if v, bad := vendorIn(p, r.VendorNames); bad && p != "." {
+			if v, bad := vendorIn(p, r.VendorNames); bad && p != "." && !r.vendorExempt(p) {
 				vs = append(vs, Violation{KindVendorName, p, "directory name contains " + strconv.Quote(v)})
 			}
 			return nil
@@ -117,7 +128,7 @@ func Check(fsys fs.FS, r Rules) []Violation {
 		if !strings.HasSuffix(name, ".go") {
 			return nil
 		}
-		if v, bad := vendorIn(name, r.VendorNames); bad {
+		if v, bad := vendorIn(name, r.VendorNames); bad && !r.vendorExempt(p) {
 			vs = append(vs, Violation{KindVendorName, p, "file name contains " + strconv.Quote(v)})
 		}
 		vs = append(vs, checkFile(fsys, p, r, graph)...)
@@ -149,10 +160,11 @@ func checkFile(fsys fs.FS, p string, r Rules, graph map[string]map[string]bool) 
 	}
 
 	// Vendor names in identifiers (not in comments or string literals).
+	exempt := r.vendorExempt(p)
 	seen := map[string]bool{}
 	ast.Inspect(f, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
-		if !ok || id.Name == "_" || seen[id.Name] {
+		if !ok || id.Name == "_" || seen[id.Name] || exempt {
 			return true
 		}
 		seen[id.Name] = true
@@ -166,7 +178,7 @@ func checkFile(fsys fs.FS, p string, r Rules, graph map[string]map[string]bool) 
 	pkg := path.Dir(p)
 	for _, imp := range f.Imports {
 		ip, _ := strconv.Unquote(imp.Path.Value)
-		if v, bad := vendorIn(ip, r.VendorNames); bad {
+		if v, bad := vendorIn(ip, r.VendorNames); bad && !exempt {
 			vs = append(vs, Violation{KindVendorName, p, "import " + ip + " contains " + strconv.Quote(v)})
 		}
 		if isTest {
@@ -190,6 +202,17 @@ func checkFile(fsys fs.FS, p string, r Rules, graph map[string]map[string]bool) 
 		}
 	}
 	return vs
+}
+
+// vendorExempt reports whether p (a directory or file path) is inside a
+// VendorExempt subtree.
+func (r Rules) vendorExempt(p string) bool {
+	for _, d := range r.VendorExempt {
+		if within(p, d) {
+			return true
+		}
+	}
+	return false
 }
 
 func vendorIn(s string, names []string) (string, bool) {

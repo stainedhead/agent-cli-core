@@ -6,14 +6,14 @@ Created: 2026-10-03 | Status: Planning
 0/25 tasks complete. Workstreams are independent: each runs in its own worktree on a disjoint package set.
 
 ## WS-A - auth/oktad + go.mod/go.sum (+ ADR text)
-- A1: Confirm `auth.DaemonClient` method set, `auth.NewToken`, `UnreachableError`/`ActionRequiredError`/`TokenError` field names; confirm `agent-okta-d` v0.1.0 resolves from the proxy. Deps: none. AC: notes in implementation-notes.
-- A2: `go get github.com/stainedhead/agent-okta-d@v0.1.0`; go.mod/go.sum only; no replace; `go mod tidy` clean. Deps: A1.
-- A3: archtest: allow the import for `auth/oktad` only; confirm vendor-name rule. Deps: A2.
-- A4: Tests first: construction/options (socket, timeout, env default), token mapping + redaction. Deps: A2.
-- A5: Tests first: mapping rows (unavailable, reauth, revoked, degraded, APIError retry-after, not-configured, unauthorized, invalid response), cancellation, retry-after carried, through clienttest. Deps: A4.
-- A6: Implement Client, options, Fetch/Refresh, errors (TransientError), compile-time assertion; Example. Deps: A5.
-- A7: ADR text for adapter error mapping (as `doc.go` + a text block handed to step 6). Deps: A6.
-- A8: Coverage at least 90 percent, race count=3 on `./auth/...`. Deps: A6.
+- [x] A1: Confirm `auth.DaemonClient` method set, `auth.NewToken`, `UnreachableError`/`ActionRequiredError`/`TokenError` field names; confirm `agent-okta-d` v0.1.0 resolves from the proxy. Deps: none. AC: notes in implementation-notes.
+- [x] A2: `go get github.com/stainedhead/agent-okta-d@v0.1.0`; go.mod/go.sum only; no replace; `go mod tidy` clean. Deps: A1.
+- [x] A3: archtest: allow the import for `auth/oktad` only; confirm vendor-name rule. Deps: A2.
+- [x] A4: Tests first: construction/options (socket, timeout, env default), token mapping + redaction. Deps: A2.
+- [x] A5: Tests first: mapping rows (unavailable, reauth, revoked, degraded, APIError retry-after, not-configured, unauthorized, invalid response), cancellation, retry-after carried, through clienttest. Deps: A4.
+- [x] A6: Implement Client, options, Fetch/Refresh, errors (TransientError), compile-time assertion; Example. Deps: A5.
+- [x] A7: ADR text for adapter error mapping (as `doc.go` + a text block handed to step 6). Deps: A6.
+- [x] A8: Coverage at least 90 percent, race count=3 on `./auth/...`. Deps: A6.
 
 ## WS-B - output (R1, R2) + docgen (R4)
 - B1: Tests first R1: Meta.NextPageToken marshal + golden unchanged when unset. 

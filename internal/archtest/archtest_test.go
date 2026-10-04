@@ -209,3 +209,37 @@ func repoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+func TestVendorExemptDirectory(t *testing.T) {
+	r := rules()
+	r.VendorNames = []string{"okta"}
+	r.VendorExempt = []string{"auth/oktad"}
+	r.External = map[string][]string{"auth/oktad": {"example.org/agent-okta-d/pkg/client"}}
+	fsys := fstest.MapFS{
+		"auth/oktad/a.go":      {Data: []byte("package oktad\nimport _ \"example.org/agent-okta-d/pkg/client\"\nvar oktaThing int\n")},
+		"auth/oktad/a_test.go": {Data: []byte("package oktad_test\nimport _ \"example.org/agent-okta-d/pkg/client/clienttest\"\n")},
+	}
+	if vs := archtest.Check(fsys, r); len(vs) != 0 {
+		t.Fatalf("exempt directory flagged: %v", vs)
+	}
+
+	// The exemption is for that subtree only; its import allow-list still binds.
+	fsys = fstest.MapFS{
+		"auth/oktad/a.go":   {Data: []byte("package oktad\nimport _ \"github.com/some/lib\"\n")},
+		"auth/oktadx/a.go":  {Data: []byte("package x\n")},
+		"output/oktaish.go": {Data: []byte("package output\n")},
+	}
+	got := map[string]bool{}
+	for _, v := range archtest.Check(fsys, r) {
+		got[v.Kind+" "+v.Path] = true
+	}
+	for _, want := range []string{
+		archtest.KindExternalImport + " auth/oktad/a.go",
+		archtest.KindVendorName + " auth/oktadx",
+		archtest.KindVendorName + " output/oktaish.go",
+	} {
+		if !got[want] {
+			t.Errorf("missing violation %q in %v", want, got)
+		}
+	}
+}

@@ -352,3 +352,89 @@ func TestConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestThroughDaemonTokenSourceKeepsAdapterErrors is the end-to-end check for
+// how every CLI uses the adapter: the typed errors must keep their category,
+// exit code and hint after passing through auth.DaemonTokenSource.
+func TestThroughDaemonTokenSourceKeepsAdapterErrors(t *testing.T) {
+	cases := []struct {
+		name     string
+		e        clienttest.Error
+		exit     output.ExitCode
+		hintHas  string
+		wantType string
+	}{
+		{"degraded with hint", clienttest.Error{Code: clienttest.CodeDegraded, RetryAfter: 30 * time.Second}, output.ExitRateLimited, "Retry after 30 seconds", "transient"},
+		{"not configured", clienttest.Error{Code: clienttest.CodeNotConfigured}, output.ExitAuth, "configured and enabled", "access"},
+		{"unauthorized", clienttest.Error{Code: clienttest.CodeUnauthorized}, output.ExitAuth, "administrator", "access"},
+	}
+	for _, row := range cases {
+		t.Run(row.name, func(t *testing.T) {
+			srv := newFake(t)
+			srv.SetProviderError("graph", row.e)
+			src, err := auth.NewDaemonTokenSource(newClient(t, srv), "graph")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for op, f := range map[string]func() error{
+				"fetch":   func() error { _, e := src.Token(context.Background()); return e },
+				"refresh": func() error { _, e := src.Refresh(context.Background()); return e },
+			} {
+				err := f()
+				if err == nil {
+					t.Fatalf("%s: no error", op)
+				}
+				if got := output.ExitOf(err); got != row.exit {
+					t.Errorf("%s: exit %d, want %d (%v)", op, got, row.exit, err)
+				}
+				env := output.FromError(err)
+				if !strings.Contains(env.Error.Hint, row.hintHas) {
+					t.Errorf("%s: hint %q lacks %q", op, env.Error.Hint, row.hintHas)
+				}
+				var te *oktad.TransientError
+				var ae *oktad.AccessError
+				switch row.wantType {
+				case "transient":
+					if !errors.As(err, &te) || te.RetryAfter() != 30*time.Second {
+						t.Errorf("%s: no TransientError with RetryAfter in chain: %v", op, err)
+					}
+				case "access":
+					if !errors.As(err, &ae) {
+						t.Errorf("%s: no AccessError in chain: %v", op, err)
+					}
+				}
+				var tok *auth.TokenError
+				if errors.As(err, &tok) {
+					t.Errorf("%s: wrapped in TokenError", op)
+				}
+				if strings.Contains(env.Error.Message+env.Error.Hint, secretToken) {
+					t.Errorf("%s: token leaked", op)
+				}
+			}
+		})
+	}
+}
+
+func TestThroughDaemonTokenSourceCancelledContextIsGeneral(t *testing.T) {
+	srv := newFake(t)
+	srv.SetDelay(2 * time.Second)
+	src, err := auth.NewDaemonTokenSource(newClient(t, srv), "graph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = src.Token(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("errors.Is deadline: %v", err)
+	}
+	var tok *auth.TokenError
+	if errors.As(err, &tok) || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("exit %d, err %v", output.ExitOf(err), err)
+	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	cancel2()
+	if _, err = src.Refresh(ctx2); !errors.Is(err, context.Canceled) || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("cancel: exit %d, err %v", output.ExitOf(err), err)
+	}
+}

@@ -25,11 +25,11 @@ All map to exit code 3 (category `auth`) through `output`:
 |---|---|---|
 | `*auth.UnreachableError` | daemon socket not reachable | names the socket and says the service may not be running |
 | `*auth.ActionRequiredError` (`errors.Is` `auth.ErrReauthRequired` / `auth.ErrRevoked`) | a human must re-enroll | generic text, plus your `WithRemediation` text in the hint |
-| `*auth.TokenError` | any other failure to get a token | provider, operation, scrubbed cause |
+| `*auth.TokenError` | any other failure to get a token that has no category of its own | provider, operation, scrubbed cause |
 
 Nothing else is tried after a failure.
 
-The adapter `auth/oktad` adds two more error types, `*oktad.TransientError` (exit 8, with a retry hint) and `*oktad.AccessError` (exit 3); see [oktad](oktad.md).
+The adapter `auth/oktad` adds two more error types, `*oktad.TransientError` (exit 8, with a retry hint) and `*oktad.AccessError` (exit 3); see [oktad](oktad.md). `DaemonTokenSource` returns them as they are (category, exit code, hint and `errors.As` all work); only errors with no category of their own are wrapped in `*auth.TokenError`.
 
 ## Testing your CLI
 

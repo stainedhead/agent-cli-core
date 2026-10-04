@@ -78,11 +78,26 @@ func (e *AuthError) Error() string {
 // Unwrap returns the refresh failure, if any.
 func (e *AuthError) Unwrap() error { return e.Err }
 
-// Category implements output.CategoryError.
-func (e *AuthError) Category() output.Category { return output.CategoryAuth }
+// Category implements output.CategoryError. A refresh failure that carries
+// its own category (a degraded credential daemon is rate_limited, for
+// example) keeps it; otherwise the category is auth.
+func (e *AuthError) Category() output.Category {
+	var ce output.CategoryError
+	if e.Err != nil && errors.As(e.Err, &ce) {
+		return ce.Category()
+	}
+	return output.CategoryAuth
+}
 
-// Hint implements output.Hinter.
+// Hint implements output.Hinter. A refresh failure that carries its own hint
+// keeps it.
 func (e *AuthError) Hint() string {
+	var h output.Hinter
+	if e.Err != nil && errors.As(e.Err, &h) {
+		if s := h.Hint(); s != "" {
+			return s
+		}
+	}
 	return "sign in again with the tool's authentication command, then retry"
 }
 

@@ -128,6 +128,9 @@ Spec/data-dictionary list `TransientError{RetryAfter time.Duration; Err error}` 
 ### New exported API
 `oktad.Client`, `oktad.New`, `oktad.Option`, `oktad.WithSocketPath`, `oktad.WithTimeout`, `(*Client).Fetch/Refresh/SocketPath/Close`, `oktad.TransientError` (+`RetryAfter`, `Hint`, `Category`, `Unwrap`, `Error`), `oktad.AccessError` (+`Hint`, `Category`, `Unwrap`, `Error`).
 
+### Amendment (v0.2.1): the adapter's errors survive `DaemonTokenSource`
+v0.2.0 shipped with `DaemonTokenSource` passing through only `*UnreachableError`, `ErrReauthRequired` and `ErrRevoked` and wrapping everything else in `*TokenError` (category auth, exit 3). That hid `*oktad.TransientError` (exit 8) and `*oktad.AccessError` (own hint) in the way every CLI uses the adapter. Rule since v0.2.1, general and without `auth` importing `auth/oktad`: an error whose chain holds an `output.CategoryError` is returned as is (inside an unexported pass-through that keeps the category, the hint and `errors.As`/`errors.Is` on the cause, and scrubs message and hint); only uncategorized errors are wrapped in `*TokenError`. `httpx.AuthError` likewise reports a refresh failure's own category and hint.
+
 ### Architecture test
 `internal/archtest` gains `Rules.VendorExempt` (internal, test support): `auth/oktad` is exempt from the vendor-name rule (directory name, identifiers and the `agent-okta-d` import path), is allowed to import `auth` and `output`, and is the only package allowed `github.com/stainedhead/agent-okta-d/pkg/client`. `auth` still cannot import it.
 

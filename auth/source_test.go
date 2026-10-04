@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -201,3 +202,88 @@ var _ tokenRefresher = (*auth.Authorizer)(nil)
 var _ auth.TokenSource = (*auth.DaemonTokenSource)(nil)
 var _ auth.Refresher = (*auth.DaemonTokenSource)(nil)
 var _ auth.DaemonClient = (*authtest.Fake)(nil)
+
+// catErr is an error that carries its own category and hint, as the adapter's
+// typed errors do.
+type catErr struct {
+	msg, hint string
+	cat       output.Category
+	cause     error
+}
+
+func (e *catErr) Error() string             { return e.msg }
+func (e *catErr) Hint() string              { return e.hint }
+func (e *catErr) Category() output.Category { return e.cat }
+func (e *catErr) Unwrap() error             { return e.cause }
+
+func TestDaemonTokenSourcePreservesCategorizedErrors(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		err  error
+		exit output.ExitCode
+	}{
+		{"rate limited", &catErr{msg: "daemon busy", hint: "retry in 30s", cat: output.CategoryRateLimited}, output.ExitRateLimited},
+		{"auth", &catErr{msg: "not configured", hint: "configure it", cat: output.CategoryAuth}, output.ExitAuth},
+		{"wrapped", fmt.Errorf("adapter: %w", &catErr{msg: "busy", hint: "retry in 5s", cat: output.CategoryRateLimited}), output.ExitRateLimited},
+	}
+	for _, c := range cases {
+		src, _ := auth.NewDaemonTokenSource(badClient{err: c.err}, "p")
+		for op, f := range map[string]func() error{
+			"fetch":   func() error { _, e := src.Token(ctx); return e },
+			"refresh": func() error { _, e := src.Refresh(ctx); return e },
+		} {
+			err := f()
+			var want *catErr
+			if !errors.As(err, &want) || !errors.Is(err, c.err) {
+				t.Errorf("%s/%s: cause chain lost: %v", c.name, op, err)
+			}
+			var te *auth.TokenError
+			if errors.As(err, &te) {
+				t.Errorf("%s/%s: must not be wrapped in TokenError", c.name, op)
+			}
+			if got := output.ExitOf(err); got != c.exit {
+				t.Errorf("%s/%s: exit %d, want %d", c.name, op, got, c.exit)
+			}
+			if env := output.FromError(err); env.Error.Hint != want.hint {
+				t.Errorf("%s/%s: hint %q, want %q", c.name, op, env.Error.Hint, want.hint)
+			}
+		}
+	}
+}
+
+func TestDaemonTokenSourceUncategorizedStillWrapped(t *testing.T) {
+	src, _ := auth.NewDaemonTokenSource(badClient{err: errors.New("daemon says no")}, "p")
+	_, err := src.Token(context.Background())
+	var te *auth.TokenError
+	if !errors.As(err, &te) || output.ExitOf(err) != output.ExitAuth {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestDaemonTokenSourceCategorizedErrorDoesNotLeak(t *testing.T) {
+	const secret = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	e := &catErr{msg: "failed with Authorization: Bearer " + secret, hint: "token " + secret, cat: output.CategoryRateLimited, cause: errors.New("raw " + secret)}
+	src, _ := auth.NewDaemonTokenSource(badClient{err: e}, "p")
+	_, err := src.Token(context.Background())
+	env := output.FromError(err)
+	for _, s := range []string{err.Error(), env.Error.Message, env.Error.Hint, fmt.Sprintf("%v %+v", err, err)} {
+		if strings.Contains(s, secret) {
+			t.Fatalf("secret leaked: %s", s)
+		}
+	}
+	if output.ExitOf(err) != output.ExitRateLimited {
+		t.Fatalf("exit %d", output.ExitOf(err))
+	}
+}
+
+func TestDaemonTokenSourceContextErrorsStayGeneral(t *testing.T) {
+	for _, ce := range []error{context.Canceled, context.DeadlineExceeded} {
+		src, _ := auth.NewDaemonTokenSource(badClient{err: fmt.Errorf("oktad: %w", ce)}, "p")
+		_, err := src.Token(context.Background())
+		var te *auth.TokenError
+		if !errors.Is(err, ce) || errors.As(err, &te) || output.ExitOf(err) != output.ExitGeneral {
+			t.Errorf("%v: err %v exit %d", ce, err, output.ExitOf(err))
+		}
+	}
+}

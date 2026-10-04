@@ -3,11 +3,13 @@ package httpx
 import (
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/stainedhead/agent-cli-core/internal/redact"
+	"github.com/stainedhead/agent-cli-core/output"
 )
 
 const leakSecret = "abc-123-xyz-registered"
@@ -69,5 +71,37 @@ func TestRateLimitedErrorErrDefenseInDepth(t *testing.T) {
 	e := &RateLimitedError{Attempts: 2, Err: errors.New("failed: Authorization: Bearer abc.def")}
 	if strings.Contains(e.Error(), "abc.def") {
 		t.Fatalf("leak: %v", e)
+	}
+}
+
+type catRefreshErr struct{}
+
+func (catRefreshErr) Error() string             { return "daemon degraded" }
+func (catRefreshErr) Hint() string              { return "retry in 30 seconds" }
+func (catRefreshErr) Category() output.Category { return output.CategoryRateLimited }
+
+func TestAuthErrorKeepsRefreshFailureCategoryAndHint(t *testing.T) {
+	e := &AuthError{Err: catRefreshErr{}}
+	if output.ExitOf(e) != output.ExitRateLimited {
+		t.Fatalf("exit %d, want rate limited", output.ExitOf(e))
+	}
+	if env := output.FromError(e); env.Error.Hint != "retry in 30 seconds" {
+		t.Fatalf("hint %q", env.Error.Hint)
+	}
+	plain := &AuthError{Err: errors.New("boom")}
+	if output.ExitOf(plain) != output.ExitAuth || plain.Hint() == "" {
+		t.Fatalf("uncategorized refresh failure must stay auth with the generic hint")
+	}
+}
+
+func TestRefreshFailureSurfacesThroughTransport401(t *testing.T) {
+	fr := &fakeRefresher{refreshErr: catRefreshErr{}}
+	fr.token.Store("tok")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) }))
+	defer srv.Close()
+	c := NewClient(Config{Refresher: fr, Clock: newFake()})
+	_, err := c.Get(srv.URL)
+	if err == nil || output.ExitOf(err) != output.ExitRateLimited {
+		t.Fatalf("err %v exit %d", err, output.ExitOf(err))
 	}
 }

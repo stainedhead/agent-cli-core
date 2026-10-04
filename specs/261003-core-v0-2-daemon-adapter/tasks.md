@@ -25,13 +25,13 @@ Created: 2026-10-03 | Status: Planning
 - B7: Coverage at least 90 percent, race count=3 on `./output/... ./docgen/...`.
 
 ## WS-C - clock (R3), audit (R5), policy (R6), httpx (R7)
-- C1: New `clock` package (promote from internal/clock) with tests moved/copied; internal/clock aliases; existing internal tests green. archtest entry. Example.
-- C2: Verify audit/policy/httpx accept public clock (compile tests, Example with Fake). Deps: C1.
-- C3: Resolve D-C4 (Record comparability) by grepping consumers; choose field shape. Deps: none.
-- C4: Tests first R5; implement Record.Extra/RuleID/TargetRef, limits, redaction, deterministic order; Example. Deps: C2, C3.
-- C5: Tests first R6 (temp files, uid cases, symlink, O_NOFOLLOW/fstat); implement `policy.CheckTrustedFile` (+unix build tags and fail-closed fallback); Example. Deps: none.
-- C6: Tests first R7; implement `Config.VendorCodeFromBody` with bounded prefix, precedence with header hook; Example. Deps: C2.
-- C7: Coverage at least 90 percent, race count=3 on `./clock/... ./audit/... ./policy/... ./httpx/... ./internal/...`.
+- [x] C1: New `clock` package (promote from internal/clock) with tests moved/copied; internal/clock aliases; existing internal tests green. archtest entry. Example.
+- [x] C2: Verify audit/policy/httpx accept public clock (compile tests, Example with Fake). Deps: C1.
+- [x] C3: Resolve D-C4 (Record comparability) by grepping consumers; choose field shape. Deps: none.
+- [x] C4: Tests first R5; implement Record.Extra/RuleID/TargetRef, limits, redaction, deterministic order; Example. Deps: C2, C3.
+- [x] C5: Tests first R6 (temp files, uid cases, symlink, O_NOFOLLOW/fstat); implement `policy.CheckTrustedFile` (+unix build tags and fail-closed fallback); Example. Deps: none.
+- [x] C6: Tests first R7; implement `Config.VendorCodeFromBody` with bounded prefix, precedence with header hook; Example. Deps: C2.
+- [x] C7: Coverage at least 90 percent, race count=3 on `./clock/... ./audit/... ./policy/... ./httpx/... ./internal/...`.
 
 ## Integration and post-workstream (not in workstreams)
 - I1: Merge WS branches; resolve archtest overlap; full gate run.

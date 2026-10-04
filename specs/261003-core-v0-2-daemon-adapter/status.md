@@ -5,7 +5,7 @@ Created: 2026-10-03
 | Phase | Status |
 |---|---|
 | Phase 0 spec | In Progress |
-| Phase 1 WS-A / WS-B / WS-C | Not Started |
+| Phase 1 WS-A / WS-B / WS-C | WS-C done (C1-C7) on feat/core-v0.2-ws-c |
 | Phase 2 integration | Not Started |
 | Phase 3 docs | Not Started |
 

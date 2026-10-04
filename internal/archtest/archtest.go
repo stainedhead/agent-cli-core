@@ -68,14 +68,15 @@ func DefaultRules() Rules {
 	return Rules{
 		Module: "github.com/stainedhead/agent-cli-core",
 		Allowed: map[string][]string{
-			"internal/clock":  {},
+			"clock":           {},
+			"internal/clock":  {"clock"},
 			"internal/redact": {},
 			"output":          {"internal/redact"},
 			"httpx":           {"output", "internal/redact", "internal/clock"},
 			"auth":            {"output", "internal/redact", "internal/clock"},
 			"auth/authtest":   {"auth", "output", "internal/clock"},
-			"policy":          {},
-			"audit":           {"internal/redact", "internal/clock"},
+			"policy":          {"output"},
+			"audit":           {"internal/redact", "internal/clock", "clock"},
 			"selftest":        {"output"},
 			"docgen":          {"output"},
 		},

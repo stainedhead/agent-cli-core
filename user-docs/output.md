@@ -73,7 +73,24 @@ In JSON the field carries `"untrusted": true`. In `table` and `text` output it i
 
 `Options.Bounds.MaxBytes` caps one write (default 32768 bytes). If `data` is an array, whole items are dropped from the end; if it is a string, it is cut on a character boundary. The result stays valid JSON and UTF-8, `meta.truncated` is `true`, and `meta.next_offset` says where to resume. Pass that value as `Options.Bounds.Offset` on the next call (your CLI would expose it as a flag such as `--offset`) and repeat until `truncated` is `false`.
 
-Return large results as an array or a string so they can be paged. Data of any other shape (an object, a number) cannot be cut: if it does not fit, `Write` returns `output.ErrBoundTooSmall`, as it does when a single array item is larger than `MaxBytes`.
+Return large results as an array or a string so they can be paged. Data of any other shape (an object, a number) cannot be cut: if it does not fit, `Write` returns `output.ErrBoundTooSmall`, as it does when a single array item is larger than `MaxBytes`. For an object that holds a list, such as `{items, total}`, set `Bounds.ArrayField`.
+
+### Bounding a list inside an object (`Bounds.ArrayField`)
+
+Set `Bounds.ArrayField` to the name of a top-level key whose value is an array. Whole items are dropped from the end of that array; every other field, and the order of all fields, is kept. It works for structs and maps.
+
+```go
+opts := output.Options{Bounds: output.Bounds{MaxBytes: 4096, Offset: 0, ArrayField: "items"}}
+```
+
+- `Offset` skips that many items; `meta.count` is the items kept; `meta.next_offset` is the absolute index of the first dropped item, exactly as for array data, so you pass it back as `Offset`.
+- A `null` array counts as empty and stays `null`. `Offset` equal to the length gives an empty page; an `Offset` past the end returns `output.ErrOffsetOutOfRange`.
+- The data must be an object with that key holding an array, otherwise `Write` returns `output.ErrArrayField` (exit 2). One item larger than the budget returns `output.ErrBoundTooSmall`.
+- Only top-level keys, not paths. Leave it empty for the previous behavior. Failure envelopes ignore it.
+
+### Continuation token (`Meta.NextPageToken`)
+
+When a service pages with its own opaque token, put it in `Meta.NextPageToken`. It is written as `meta.next_page_token` (omitted when empty), is never cut, counts toward the byte budget, and appears as `next_page_token=` in the table and text footer. It stays set when output is truncated, so the order is: resume with `next_offset` while `truncated` is `true`, and use the token for the next vendor page once `truncated` is `false`. Only put a value there that is safe to show; the library does not treat it as a secret.
 
 ## Formats
 

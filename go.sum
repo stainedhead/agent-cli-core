@@ -1,2 +1,4 @@
 github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=
 github.com/goccy/go-yaml v1.19.2/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
+github.com/stainedhead/agent-okta-d v0.1.0 h1:UPgV61FpBPQJvk7xEd12Exi9zER/AQz49k0tanlxvuo=
+github.com/stainedhead/agent-okta-d v0.1.0/go.mod h1:80iCfQLi9wTfp4Ua90kiPoJ/AtYoB2Q/hf6E9XIzXww=

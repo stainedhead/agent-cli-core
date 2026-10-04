@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,6 +46,19 @@ type Bounds struct {
 	// first item for array data, the byte offset for string data. Use the
 	// previous meta.next_offset.
 	Offset int
+	// ArrayField names a top-level key of object-shaped data whose value is
+	// an array to bound. When set, the data must be a JSON object (a struct
+	// or map) containing that key as an array (or null, which counts as
+	// empty); Write then trims whole items from the end of that array until
+	// the envelope fits, leaving every other field untouched and in its
+	// original order. Offset skips that many items from the start of the
+	// array, Meta.Count is the number of items kept, Meta.Truncated is set
+	// when items were dropped and Meta.NextOffset is Offset plus the items
+	// kept, the same absolute item index that array data uses. Only a
+	// top-level key is supported, not a path. A missing key, a value that is
+	// not an array, or data that is not an object returns ErrArrayField.
+	// The zero value leaves behaviour exactly as before.
+	ArrayField string
 }
 
 // Options controls Write.
@@ -68,6 +82,9 @@ var (
 	// ErrBoundTooSmall means the smallest unit of data (one array item, one
 	// character, or a non-splittable value) does not fit in MaxBytes.
 	ErrBoundTooSmall = categoryErr{CategoryUsage, "max-bytes is too small for the smallest unit of output"}
+	// ErrArrayField means Bounds.ArrayField is set but the data is not an
+	// object that holds an array under that key.
+	ErrArrayField = categoryErr{CategoryUsage, "bounds array field is not an array in the object data"}
 	// ErrUnknownFormat means Options.Format is not json, table or text.
 	ErrUnknownFormat = categoryErr{CategoryUsage, "unknown output format"}
 )
@@ -119,7 +136,7 @@ func Render(env Envelope, opts Options) ([]byte, error) {
 		return renderError(env, f, opts.Secrets)
 	}
 
-	v, err := newView(env.Data)
+	v, err := newView(env.Data, opts.Bounds.ArrayField)
 	if err != nil {
 		return nil, fmt.Errorf("output: encode data: %w", err)
 	}
@@ -130,6 +147,10 @@ func Render(env Envelope, opts Options) ([]byte, error) {
 	meta.Truncated, meta.NextOffset = false, nil
 	return fit(v, meta, f, max, opts.Bounds.Offset)
 }
+
+// counted reports whether the view has a countable item list (an array, or an
+// object bounded through Bounds.ArrayField).
+func (v view) counted() bool { return v.kind == vArray || v.kind == vObject }
 
 func renderError(env Envelope, f Format, secrets []string) ([]byte, error) {
 	e := Error{Code: CategoryGeneral, Message: "unspecified error"}
@@ -157,6 +178,7 @@ const (
 	vOther viewKind = iota
 	vArray
 	vString
+	vObject // object data bounded through Bounds.ArrayField
 )
 
 // view is the data of a success envelope in a form that can be cut.
@@ -165,12 +187,23 @@ type view struct {
 	items []json.RawMessage // vArray
 	str   string            // vString
 	raw   json.RawMessage   // vOther
+
+	// vObject: the object's fields in their original order. The field at
+	// arrIdx is the array; items holds its elements (nil when it is null,
+	// in which case arrNull is true and it renders as null).
+	keys    []string
+	vals    []json.RawMessage
+	arrIdx  int
+	arrNull bool
 }
 
-func newView(data any) (view, error) {
+func newView(data any, arrayField string) (view, error) {
 	raw, err := marshal(data)
 	if err != nil {
 		return view{}, err
+	}
+	if arrayField != "" {
+		return newObjectView(raw, arrayField)
 	}
 	switch firstByte(raw) {
 	case '[':
@@ -189,6 +222,50 @@ func newView(data any) (view, error) {
 	return view{kind: vOther, raw: raw}, nil
 }
 
+// newObjectView splits an object into its fields (keeping their order and
+// exact bytes) and its bounded array.
+func newObjectView(raw []byte, field string) (view, error) {
+	if firstByte(raw) != '{' {
+		return view{}, ErrArrayField
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := dec.Token(); err != nil { // '{'
+		return view{}, err
+	}
+	v := view{kind: vObject, arrIdx: -1}
+	for dec.More() {
+		kt, err := dec.Token()
+		if err != nil {
+			return view{}, err
+		}
+		key, _ := kt.(string)
+		var val json.RawMessage
+		if err := dec.Decode(&val); err != nil {
+			return view{}, err
+		}
+		if key == field && v.arrIdx < 0 {
+			v.arrIdx = len(v.keys)
+		}
+		v.keys = append(v.keys, key)
+		v.vals = append(v.vals, val)
+	}
+	if v.arrIdx < 0 {
+		return view{}, ErrArrayField
+	}
+	arr := v.vals[v.arrIdx]
+	switch firstByte(arr) {
+	case 'n':
+		v.arrNull = true
+	case '[':
+		if err := json.Unmarshal(arr, &v.items); err != nil {
+			return view{}, err
+		}
+	default:
+		return view{}, ErrArrayField
+	}
+	return v, nil
+}
+
 func firstByte(b []byte) byte {
 	for _, c := range b {
 		if c != ' ' && c != '\n' && c != '\t' && c != '\r' {
@@ -204,6 +281,8 @@ func (v view) length() int {
 		return len(v.items)
 	case vString:
 		return len(v.str)
+	case vObject:
+		return len(v.items)
 	}
 	return 0
 }
@@ -215,6 +294,10 @@ func (v view) slice(off, n int) view {
 		return view{kind: vArray, items: v.items[off : off+n]}
 	case vString:
 		return view{kind: vString, str: v.str[off : off+n]}
+	case vObject:
+		o := v
+		o.items = v.items[off : off+n]
+		return o
 	}
 	return v
 }
@@ -233,11 +316,34 @@ func (v view) jsonData() []byte {
 	case vString:
 		b, _ := marshal(v.str)
 		return b
+	case vObject:
+		b := []byte{'{'}
+		for i, k := range v.keys {
+			if i > 0 {
+				b = append(b, ',')
+			}
+			kb, _ := marshal(k)
+			b = append(b, kb...)
+			b = append(b, ':')
+			switch {
+			case i != v.arrIdx:
+				b = append(b, v.vals[i]...)
+			case v.arrNull:
+				b = append(b, "null"...)
+			default:
+				b = append(b, v.arrayJSON()...)
+			}
+		}
+		return append(b, '}')
 	}
 	if len(v.raw) == 0 {
 		return []byte("null")
 	}
 	return v.raw
+}
+
+func (v view) arrayJSON() []byte {
+	return view{kind: vArray, items: v.items}.jsonData()
 }
 
 func (v view) node() (node, error) { return parseNode(v.jsonData()) }
@@ -264,7 +370,7 @@ func fit(v view, meta Meta, f Format, max, offset int) ([]byte, error) {
 
 	render := func(part view, count int, truncated bool, next int) ([]byte, error) {
 		m := meta
-		if v.kind == vArray {
+		if v.counted() {
 			m.Count = count
 		}
 		if truncated {
@@ -296,7 +402,7 @@ func fit(v view, meta Meta, f Format, max, offset int) ([]byte, error) {
 		return b, len(b) <= max, nil
 	}
 	var cuts []int // candidate lengths n in (0, remaining), ascending
-	if v.kind == vArray {
+	if v.counted() {
 		for n := 1; n < remaining; n++ {
 			cuts = append(cuts, n)
 		}
@@ -343,6 +449,6 @@ func renderSuccess(part view, m Meta, f Format) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return renderPlain(n, part.kind == vArray, m, f), nil
+		return renderPlain(n, part.counted(), m, f), nil
 	}
 }

@@ -25,6 +25,11 @@ const (
 	DefaultMaxWait = 60 * time.Second
 	// DefaultJitter is the default jitter fraction.
 	DefaultJitter = 0.2
+	// DefaultVendorBodyLimit is how many bytes of a 403 body
+	// Config.VendorCodeFromBody is offered when VendorBodyLimit is zero.
+	DefaultVendorBodyLimit = 4096
+	// MaxVendorBodyLimit caps Config.VendorBodyLimit.
+	MaxVendorBodyLimit = 64 << 10
 )
 
 // Clock is the time source for waits. The library's internal clock (real and
@@ -66,6 +71,20 @@ type Config struct {
 	// VendorCode extracts a vendor error code from the headers of a 403
 	// response. Nil means no code. The response body is never offered.
 	VendorCode func(h http.Header) string
+	// VendorCodeFromBody extracts a vendor error code from the first bytes of
+	// the body of a 403 response, for vendors that put the code in a JSON
+	// body. It is called only for a 403, only when VendorCode is nil or
+	// returned nothing, with at most VendorBodyLimit bytes (a read error means
+	// it is not called). The result is trimmed, stripped of control
+	// characters, scrubbed and cut to 64 bytes before it becomes
+	// ForbiddenError.VendorCode. The body itself is discarded and never put
+	// in an error. The hook must not retain prefix, and a panic in it is not
+	// recovered. Nil means no body is read.
+	VendorCodeFromBody func(status int, prefix []byte) string
+	// VendorBodyLimit is the most bytes offered to VendorCodeFromBody. Zero
+	// means DefaultVendorBodyLimit; values above MaxVendorBodyLimit are
+	// reduced to it.
+	VendorBodyLimit int
 	// Trace, when non-nil, receives one redacted line per attempt. Tracing is
 	// off by default. Bodies are never traced.
 	Trace io.Writer

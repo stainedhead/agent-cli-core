@@ -1,6 +1,6 @@
 # Configuration reference
 
-Everything the library can be configured with. The library defines no command-line flags and reads no environment variables: your CLI decides how values reach it (flags, files, environment) and passes them in. Where a conventional name helps, the table gives a suggested flag.
+Everything the library can be configured with. The library defines no command-line flags and reads no environment variables itself (the one exception is the daemon client behind `auth/oktad`, which reads `AGENT_OKTA_D_SOCKET` unless you pass a socket path): your CLI decides how values reach it (flags, files, environment) and passes them in. Where a conventional name helps, the table gives a suggested flag.
 
 ## Policy file (YAML)
 
@@ -30,7 +30,9 @@ Requests no rule allows are denied with rule id `default-deny`. Only requests th
 |---|---|---|
 | `policy.WithWritable(m)` | `WritableWarn` (default), `WritableRefuse`, `WritableIgnore` | What to do when the current user can write the policy file or its directory. POSIX only. Warnings are in `p.Warnings()`; refusal returns `*policy.WritableError` |
 
-`policy.NewEngine(p, clock)`: `clock` is any value with `Now() time.Time`; `nil` means real time.
+`policy.NewEngine(p, clock)`: `clock` is any value with `Now() time.Time` (a [`clock.Clock`](clock.md) works); `nil` means real time.
+
+`policy.CheckTrustedFile(path, opts...)` (v0.2.0) is a separate call, not a `Load` option. `policy.WithTrustedUIDs(uids...)` adds trusted owners besides root. See [policy](policy.md).
 
 The policy file is a guardrail, not a security control. Keep it where the agent user cannot edit it.
 
@@ -50,9 +52,9 @@ The policy file is a guardrail, not a security control. Keep it where the agent 
 | `WithFailureMode(m)` | `audit.Warn` or `audit.Block` (alternative to `Config.OnFailure`) |
 | `WithOnWriteError(f)` | Called in warn mode with the failed write's error; print it on stderr |
 | `WithSecrets(s...)` | Literal values that must never be written |
-| `WithClock(c)` | Timestamp source for tests; any value with `Now() time.Time` and `Sleep(ctx, d) error` |
+| `WithClock(c)` | Timestamp source for tests; a [`clock.Clock`](clock.md). Nil keeps the system clock |
 
-Record schema (version 1): `schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`. Text fields are redacted and capped at 512 bytes.
+Record schema (version 1): `schema_version, ts, tool, agent_id, run_id, verb, resource, outcome, http_status, duration, policy_decision`, plus optional `rule_id`, `target_ref`, `extra` (v0.2.0). Text fields are redacted and capped at 512 bytes. `extra`: at most 16 keys matching `[a-z0-9_.-]{1,32}`, values redacted and cut to 256 bytes.
 
 ## HTTP (`httpx.Config`)
 
@@ -69,6 +71,8 @@ The zero value is usable.
 | `Rand` | random | `func() float64` in [0,1) for jitter |
 | `Refresher` | none | Authorizes each attempt and refreshes once on 401. `*auth.Authorizer` fits. Without it a 401 is `*AuthError` |
 | `VendorCode` | none | `func(http.Header) string` extracting a vendor code from a 403's headers |
+| `VendorCodeFromBody` | none | `func(status int, prefix []byte) string` extracting a vendor code from a 403's body when the headers gave none (v0.2.0) |
+| `VendorBodyLimit` | 4096 | Bytes of body the hook sees; capped at 65536 (v0.2.0) |
 | `Trace` | nil (off) | `io.Writer` receiving one redacted line per attempt; leave nil in agent mode |
 | `AllowedHosts` | first request's host | Hosts the client may contact (`host` for any port, `host:port` to pin). Others, including redirect targets, fail with `*httpx.ForbiddenHostError` (exit 4) before any credential is attached |
 | `AllowInsecureHTTP` | false | Permit plain `http` to non-loopback hosts; loopback is always allowed |
@@ -82,7 +86,8 @@ Per request: `httpx.MarkSafeToRetry(req)` allows retrying a POST or PATCH that c
 |---|---|
 | provider name (`NewDaemonTokenSource` argument) | Required; the library has no default |
 | `auth.WithRemediation(text)` | Tool-specific instruction added to the re-enrollment hint |
-| daemon socket | Owned by your `DaemonClient` implementation; the library never reads one. `authtest.WithSocket(path)` sets the name a fake reports |
+| daemon socket | With `auth/oktad`: `oktad.WithSocketPath(path)`, else the `AGENT_OKTA_D_SOCKET` environment variable read by the daemon client, else the platform default. With your own `DaemonClient` it is yours. `authtest.WithSocket(path)` sets the name a fake reports |
+| `oktad.WithTimeout(d)` | Per-request timeout of the daemon client; zero or less keeps its default |
 
 ## Output (`output.Options`)
 
@@ -91,7 +96,10 @@ Per request: `httpx.MarkSafeToRetry(req)` allows retrying a POST or PATCH that c
 | `Format` | `json` | `json`, `table` or `text`; `output.ParseFormat` parses the string | `--format` |
 | `Bounds.MaxBytes` | 32768 | Largest output of one write; negative is invalid | `--max-bytes` |
 | `Bounds.Offset` | 0 | Where to resume: item index for arrays, byte offset for strings; use the previous `meta.next_offset` | `--offset` |
+| `Bounds.ArrayField` | empty | Top-level key of object data whose array is bounded; `Offset` then counts items of that array (v0.2.0) | none |
 | `Secrets` | none | Literal values scrubbed from error messages and hints | none |
+
+The envelope's `Meta.NextPageToken` (v0.2.0) is set by your tool, not by an option; see [output](output.md).
 
 Use `policy` `Limits.ClampResults(n)` and `ClampBytes(n)` to combine policy caps with your own.
 
@@ -105,8 +113,8 @@ Use `policy` `Limits.ClampResults(n)` and `ClampBytes(n)` to combine policy caps
 
 ## Skill generation (`docgen.CommandTree`)
 
-`Name` (required; letters, digits, `.`, `_`, `-`), `Description`, and `Commands` each with `Name` (unique), `Description`, `Usage`, `Examples`, `Forbidden`.
+`Name` (required; letters, digits, `.`, `_`, `-`), `Description`, and `Commands` each with `Name` (unique among siblings), `Description`, `Usage`, `Examples`, `Forbidden`, and `Subcommands` (same fields, up to 4 levels deep; v0.2.0).
 
 ## Build-time requirements
 
-Go 1.27; targets darwin/arm64, linux/amd64, linux/arm64. One third-party dependency, `github.com/goccy/go-yaml`.
+Go 1.27; targets darwin/arm64, linux/amd64, linux/arm64. Third-party modules: `github.com/goccy/go-yaml` and, from v0.2.0, `github.com/stainedhead/agent-okta-d` v0.1.0 (only for `auth/oktad`).

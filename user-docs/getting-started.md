@@ -8,7 +8,7 @@ This guide builds one command of a CLI the way the library intends: policy first
 go get github.com/stainedhead/agent-cli-core@vX.Y.Z
 ```
 
-`vX.Y.Z` is a placeholder: no version is tagged yet (see the [index](README.md)). The module needs Go 1.27 and pulls in one third-party package, `github.com/goccy/go-yaml`.
+`vX.Y.Z` is a placeholder: no version is tagged yet (see the [index](README.md)). The module needs Go 1.27 and pulls in two third-party modules, `github.com/goccy/go-yaml` (for `policy`) and, from v0.2.0, `github.com/stainedhead/agent-okta-d` (for `auth/oktad`).
 
 ## 2. Order of every command
 
@@ -114,11 +114,11 @@ func emit(w io.Writer, env output.Envelope) output.ExitCode {
 func main() { os.Exit(int(run(context.Background(), myDaemonAdapter{}))) }
 ```
 
-`myDaemonAdapter` is your type implementing `auth.DaemonClient` (`Fetch` and `Refresh`); see [auth](auth.md). A runnable, vendor-neutral version of this flow, with fakes, is in the library repository under `examples/sampletool`.
+`myDaemonAdapter` stands for the daemon client: use `oktad.New()` from `auth/oktad` (see [oktad](oktad.md)) or your own type implementing `auth.DaemonClient` (`Fetch` and `Refresh`); see [auth](auth.md). A runnable, vendor-neutral version of this flow, with fakes, is in the library repository under `examples/sampletool`.
 
 ## 4. Things to remember
 
-- Policy errors do not carry an output category (the `policy` package does not import `output`); you map a refusal to `policy_denied` as above, and an invalid policy to `validation`.
+- Most policy errors do not carry an output category (only `*policy.TrustError` does); you map a refusal to `policy_denied` as above, and an invalid policy to `validation`.
 - A 404 or 409 comes back from `httpx` as an ordinary response. Map it yourself to `output.CategoryNotFound` or `output.CategoryConflict` with a small error type implementing `Category()`.
 - Wrap free text written by other people in `output.Untrusted`; the library cannot guess which fields they are.
 - Expose paging by adding a flag such as `--offset` that fills `output.Options.Bounds.Offset`, and `--max-bytes` for `Bounds.MaxBytes`. The library defines no flags.

@@ -40,7 +40,20 @@ type Command struct {
 	Examples []string
 	// Forbidden lists actions the agent must never take with this command.
 	Forbidden []string
+	// Subcommands lists nested commands (for example "send" under "mail").
+	// Empty means the command is a leaf. Children are rendered under their
+	// parent, sorted by name, one heading level deeper, titled with the full
+	// path ("mail send"). A parent's own description, usage, examples and
+	// forbidden list render as usual before its children. Usage and Examples
+	// are the caller's text and should carry the full invocation. Names must
+	// be unique among siblings, follow the same rules as top-level names,
+	// and nesting is limited to MaxDepth levels.
+	Subcommands []Command
 }
+
+// MaxDepth is the deepest command nesting Generate accepts: a top-level
+// command is depth 1, its subcommands depth 2, and so on.
+const MaxDepth = 4
 
 // Error is the error returned for an invalid CommandTree. It carries the
 // validation category, so output.ExitOf maps it to the validation exit code.
@@ -65,7 +78,7 @@ func Generate(tree CommandTree) ([]byte, error) {
 		return nil, err
 	}
 	cmds := append([]Command(nil), tree.Commands...)
-	sort.Slice(cmds, func(i, j int) bool { return cmds[i].Name < cmds[j].Name })
+	sortByName(cmds)
 
 	var b strings.Builder
 	desc := oneLine(tree.Description)
@@ -84,7 +97,7 @@ func Generate(tree CommandTree) ([]byte, error) {
 		b.WriteString("No commands are documented.\n\n")
 	}
 	for _, c := range cmds {
-		writeCommand(&b, c)
+		writeTree(&b, c, "", 3)
 	}
 	if err := writeFixed(&b); err != nil {
 		return nil, err
@@ -101,8 +114,16 @@ func validate(tree CommandTree) error {
 			return invalid("tree name %q has an invalid character", tree.Name)
 		}
 	}
+	return validateSiblings(tree.Commands, "", 1)
+}
+
+// validateSiblings checks one level of commands and recurses into children.
+func validateSiblings(cmds []Command, parent string, depth int) error {
+	if len(cmds) > 0 && depth > MaxDepth {
+		return invalid("command %q is nested deeper than %d levels", parent, MaxDepth)
+	}
 	seen := map[string]bool{}
-	for _, c := range tree.Commands {
+	for _, c := range cmds {
 		name := strings.TrimSpace(c.Name)
 		if name == "" {
 			return invalid("a command has an empty name")
@@ -111,15 +132,36 @@ func validate(tree CommandTree) error {
 			return invalid("command name %q has a control character", name)
 		}
 		if seen[name] {
-			return invalid("duplicate command %q", name)
+			return invalid("duplicate command %q", join(parent, name))
 		}
 		seen[name] = true
+		if err := validateSiblings(c.Subcommands, join(parent, name), depth+1); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func writeCommand(b *strings.Builder, c Command) {
-	b.WriteString("### " + strings.TrimSpace(c.Name) + "\n\n")
+func join(parent, name string) string {
+	if parent == "" {
+		return name
+	}
+	return parent + " " + name
+}
+
+// writeTree writes c under heading level, then its subcommands sorted by name.
+func writeTree(b *strings.Builder, c Command, parent string, level int) {
+	path := join(parent, strings.TrimSpace(c.Name))
+	writeCommand(b, c, path, level)
+	subs := append([]Command(nil), c.Subcommands...)
+	sortByName(subs)
+	for _, sc := range subs {
+		writeTree(b, sc, path, level+1)
+	}
+}
+
+func writeCommand(b *strings.Builder, c Command, path string, level int) {
+	b.WriteString(strings.Repeat("#", level) + " " + path + "\n\n")
 	if d := oneLine(c.Description); d != "" {
 		b.WriteString(d + "\n\n")
 	}
@@ -237,4 +279,12 @@ func fenced(s string) string {
 	}
 	fence := strings.Repeat("`", max(3, longest+1))
 	return fence + "\n" + s + "\n" + fence + "\n"
+}
+
+// sortByName orders siblings by their trimmed name, the same form the
+// uniqueness check compares, so the output does not depend on input order.
+func sortByName(cmds []Command) {
+	sort.SliceStable(cmds, func(i, j int) bool {
+		return strings.TrimSpace(cmds[i].Name) < strings.TrimSpace(cmds[j].Name)
+	})
 }

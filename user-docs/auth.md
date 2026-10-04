@@ -5,12 +5,14 @@ Token acquisition for your CLI. You give it a way to reach the credential daemon
 ## Wire it up
 
 ```go
-daemon := myAdapter{}                         // implements auth.DaemonClient
+daemon := oktad.New()                         // implements auth.DaemonClient; see oktad.md
+defer daemon.Close()
 src, err := auth.NewDaemonTokenSource(daemon, "my-provider",
     auth.WithRemediation("run `mytool enroll my-provider`"))
 authz := auth.NewAuthorizer(src)              // pass to the HTTP layer
 ```
 
+- `auth/oktad` is the adapter for the real credential daemon; see [oktad](oktad.md). Any other type with `Fetch` and `Refresh` also works.
 - The provider name is yours; the library has no default and no fallback credentials.
 - `authz` has `Authorize(ctx, *http.Request) error` and `Refresh(ctx) error`, the shape the `httpx` package expects, so it plugs in with no glue. `Authorize` sets the `Authorization` header itself; nothing in the library returns or prints a token, and there is no `print-token` helper.
 - `auth.Token` prints as `[redacted]` under `%v`, `%+v`, `%#v`, `%s`, JSON, text marshaling and `log/slog`, including when a Token sits in an unexported struct field. Limits: in-process `reflect`/`unsafe` access and memory dumps can still read the value.
@@ -27,6 +29,8 @@ All map to exit code 3 (category `auth`) through `output`:
 
 Nothing else is tried after a failure.
 
+The adapter `auth/oktad` adds two more error types, `*oktad.TransientError` (exit 8, with a retry hint) and `*oktad.AccessError` (exit 3); see [oktad](oktad.md).
+
 ## Testing your CLI
 
 `auth/authtest` gives a fake daemon and fake resource server:
@@ -40,11 +44,10 @@ Scenarios: `Valid`, `ExpiredNeedsRefresh`, `ReauthRequired`, `Revoked`, `Unreach
 
 ## Not included yet
 
-- The adapter over the credential daemon's own Go client. It is deferred until that module has a tagged release. When it exists it implements `auth.DaemonClient`; until then write a small adapter of your own or use the fake in tests.
 - Human-mode login (browser PKCE, OS keychain). Supply your own `auth.TokenSource`; add `Refresh(ctx) (auth.Token, error)` if you want forced refresh.
 
 ## Troubleshooting
 
-- Exit 3 and "unreachable at socket ...": start the daemon or fix the socket path.
+- Exit 3 and "unreachable at socket ...": start the daemon or fix the socket path (see [oktad](oktad.md)).
 - Exit 3 and "human action is needed": run the remediation command shown in the hint.
 - `ErrRefreshUnsupported`: your custom source needs a `Refresh` method.

@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/stainedhead/agent-cli-core/internal/clock"
+	"github.com/stainedhead/agent-cli-core/clock"
 	"github.com/stainedhead/agent-cli-core/internal/redact"
 )
 
@@ -60,7 +60,42 @@ type Record struct {
 	// PolicyDecision is the policy outcome as a plain string, for example
 	// "allow", "dry_run_only" or "deny".
 	PolicyDecision string `json:"policy_decision"`
+	// RuleID is the id of the policy rule that decided the action, if any.
+	RuleID string `json:"rule_id,omitempty"`
+	// TargetRef is a reference to the target of the action, such as an
+	// object id. It is metadata, never content.
+	TargetRef string `json:"target_ref,omitempty"`
+	// Extra holds tool-specific metadata columns, for example a recipient
+	// count. It is bounded: at most MaxExtraKeys keys, each matching
+	// [a-z0-9_.-]{1,32} and none changed by the redaction pass (a key that
+	// is or contains a secret is rejected), each value cut to MaxExtraValueLen bytes. A record
+	// that breaks the key rules is not written (see ErrInvalidExtra). Values
+	// pass through the redaction pass. Extra must not carry content or
+	// credentials.
+	//
+	// Extra is a pointer so that Record stays comparable with ==, as it was
+	// in v0.1.0. A nil or empty Extra is omitted from the output.
+	Extra *ExtraFields `json:"extra,omitempty"`
 }
+
+// ExtraFields is the key/value set carried by Record.Extra. Build one with a
+// composite literal: &audit.ExtraFields{"recipient_count": "2"}.
+type ExtraFields map[string]string
+
+// Limits on Record.Extra.
+const (
+	// MaxExtraKeys is the most keys Record.Extra may hold.
+	MaxExtraKeys = 16
+	// MaxExtraKeyLen is the longest key, in bytes.
+	MaxExtraKeyLen = 32
+	// MaxExtraValueLen is the longest value, in bytes; longer values are cut
+	// on a rune boundary.
+	MaxExtraValueLen = 256
+)
+
+// ErrInvalidExtra is matched by errors.Is when Record.Extra breaks the key
+// count or key syntax rules. The failed Log also matches ErrWrite.
+var ErrInvalidExtra = errors.New("audit: invalid extra field")
 
 // recordJSON is the wire shape; field order here is the column order on disk.
 type recordJSON struct {
@@ -75,12 +110,23 @@ type recordJSON struct {
 	HTTPStatus     int       `json:"http_status,omitempty"`
 	Duration       string    `json:"duration,omitempty"`
 	PolicyDecision string    `json:"policy_decision"`
+	RuleID         string    `json:"rule_id,omitempty"`
+	TargetRef      string    `json:"target_ref,omitempty"`
+	// Extra marshals with sorted keys, so output is deterministic.
+	Extra *ExtraFields `json:"extra,omitempty"`
 }
 
 // MarshalJSON encodes the record with Duration as a Go duration string.
 func (r Record) MarshalJSON() ([]byte, error) {
-	w := recordJSON{r.SchemaVersion, r.Timestamp, r.Tool, r.AgentID, r.RunID,
-		r.Verb, r.Resource, r.Outcome, r.HTTPStatus, "", r.PolicyDecision}
+	w := recordJSON{
+		SchemaVersion: r.SchemaVersion, Timestamp: r.Timestamp, Tool: r.Tool,
+		AgentID: r.AgentID, RunID: r.RunID, Verb: r.Verb, Resource: r.Resource,
+		Outcome: r.Outcome, HTTPStatus: r.HTTPStatus, PolicyDecision: r.PolicyDecision,
+		RuleID: r.RuleID, TargetRef: r.TargetRef,
+	}
+	if r.Extra != nil && len(*r.Extra) > 0 {
+		w.Extra = r.Extra
+	}
 	if r.Duration != 0 {
 		w.Duration = r.Duration.String()
 	}
@@ -93,8 +139,12 @@ func (r *Record) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &w); err != nil {
 		return err
 	}
-	*r = Record{w.SchemaVersion, w.Timestamp, w.Tool, w.AgentID, w.RunID,
-		w.Verb, w.Resource, w.Outcome, w.HTTPStatus, 0, w.PolicyDecision}
+	*r = Record{
+		SchemaVersion: w.SchemaVersion, Timestamp: w.Timestamp, Tool: w.Tool,
+		AgentID: w.AgentID, RunID: w.RunID, Verb: w.Verb, Resource: w.Resource,
+		Outcome: w.Outcome, HTTPStatus: w.HTTPStatus, PolicyDecision: w.PolicyDecision,
+		RuleID: w.RuleID, TargetRef: w.TargetRef, Extra: w.Extra,
+	}
 	if w.Duration != "" {
 		d, err := time.ParseDuration(w.Duration)
 		if err != nil {
@@ -179,8 +229,16 @@ type Config struct {
 // Option customizes a Logger.
 type Option func(*Logger)
 
-// WithClock injects the clock used to timestamp records.
-func WithClock(c clock.Clock) Option { return func(l *Logger) { l.clock = c } }
+// WithClock injects the clock used to timestamp records. Any clock.Clock
+// works, including a consumer's own implementation or a clock.Fake. A nil
+// clock keeps the system clock.
+func WithClock(c clock.Clock) Option {
+	return func(l *Logger) {
+		if c != nil {
+			l.clock = c
+		}
+	}
+}
 
 // WithSecrets registers literal secret values that must never be written.
 func WithSecrets(secrets ...string) Option {
@@ -251,8 +309,13 @@ type closedWriter struct{}
 func (closedWriter) Write([]byte) (int, error) { return 0, os.ErrClosed }
 
 // Log scrubs rec, stamps it and appends it as one line. Any failure is
-// returned as a *WriteError (matching ErrWrite); nothing is swallowed.
+// returned as a *WriteError (matching ErrWrite); nothing is swallowed. A
+// record whose Extra breaks its rules is not written and also matches
+// ErrInvalidExtra.
 func (l *Logger) Log(rec Record) error {
+	if err := l.checkExtra(rec.Extra); err != nil {
+		return &WriteError{Err: err}
+	}
 	rec = l.sanitize(rec)
 	line, err := json.Marshal(rec)
 	if err != nil {
@@ -288,14 +351,68 @@ func (l *Logger) Handle(rec Record, actionErr error) error {
 
 func (l *Logger) sanitize(r Record) Record {
 	r.SchemaVersion = SchemaVersion
+	src := r.Extra
 	if r.Timestamp.IsZero() {
 		r.Timestamp = l.clock.Now()
 	}
 	r.Timestamp = r.Timestamp.UTC()
-	for _, p := range []*string{&r.Tool, &r.AgentID, &r.RunID, &r.Verb, &r.Resource, &r.Outcome, &r.PolicyDecision} {
+	for _, p := range []*string{&r.Tool, &r.AgentID, &r.RunID, &r.Verb, &r.Resource, &r.Outcome, &r.PolicyDecision, &r.RuleID, &r.TargetRef} {
 		*p = capField(l.red.String(*p))
 	}
+	r.Extra = nil
+	if src != nil && len(*src) > 0 {
+		m := make(ExtraFields, len(*src))
+		for k, v := range *src {
+			m[k] = capBytes(l.red.String(v), MaxExtraValueLen)
+		}
+		r.Extra = &m
+	}
 	return r
+}
+
+// checkExtra validates the count and key syntax of Extra, and rejects any key
+// the redactor would change, so a secret used as a key is never written. The
+// errors never contain a key.
+func (l *Logger) checkExtra(extra *ExtraFields) error {
+	if extra == nil {
+		return nil
+	}
+	if len(*extra) > MaxExtraKeys {
+		return fmt.Errorf("%w: %d keys (max %d)", ErrInvalidExtra, len(*extra), MaxExtraKeys)
+	}
+	for k := range *extra {
+		if !validExtraKey(k) {
+			return fmt.Errorf("%w: a key must match [a-z0-9_.-]{1,%d}", ErrInvalidExtra, MaxExtraKeyLen)
+		}
+		if l.red.String(k) != k {
+			return fmt.Errorf("%w: a key matches a redaction rule", ErrInvalidExtra)
+		}
+	}
+	return nil
+}
+
+func validExtraKey(k string) bool {
+	if k == "" || len(k) > MaxExtraKeyLen {
+		return false
+	}
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' && c != '.' && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// capBytes cuts s to at most n bytes on a rune boundary.
+func capBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 func capField(s string) string {

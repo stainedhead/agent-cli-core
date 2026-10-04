@@ -2,7 +2,7 @@ name: CI
 
 # Implements BLD-1..BLD-6 of the PRD (CI/CD section). Pull requests and manual
 # runs only: there is no release, publish or deploy job, no secret beyond the
-# default read-only token, and no job that needs another repository.
+# default read-only token. The downstream job only reads public consumer repos.
 
 on:
   pull_request:
@@ -105,3 +105,51 @@ jobs:
         run: |
           go build ./...
           go vet ./...
+
+  # Backward-compatibility check: builds, vets and tests each published consumer
+  # (their main branch) against THIS pull request's core, so a change that breaks
+  # snow-cli, outlook-cli or teams-cli is caught before release. The consumers are
+  # public, so no credential is needed beyond the default read-only token. A
+  # go.work file in the parent directory points both modules at the local
+  # checkouts; the consumer's go.mod is never edited, so its own guard tests
+  # (no replace directive, no pseudo-version) still run and pass.
+  downstream:
+    name: downstream ${{ matrix.consumer }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: [snow-cli, outlook-cli, teams-cli]
+    steps:
+      - name: Checkout core (this pull request)
+        uses: actions/checkout@v7
+        with:
+          path: core
+          persist-credentials: false
+      - name: Checkout consumer (main)
+        uses: actions/checkout@v7
+        with:
+          repository: stainedhead/${{ matrix.consumer }}
+          ref: main
+          path: consumer
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: |
+            core/go.sum
+            consumer/go.sum
+      - name: Use the local core through a go.work file
+        run: |
+          printf 'go 1.27\n\nuse (\n\t./core\n\t./consumer\n)\n' > go.work
+          go list -m -f '{{.Path}} -> {{.Dir}}' github.com/stainedhead/agent-cli-core
+      - name: Build
+        working-directory: consumer
+        run: go build ./...
+      - name: Vet
+        working-directory: consumer
+        run: go vet ./...
+      - name: Test
+        working-directory: consumer
+        run: go test -race ./...

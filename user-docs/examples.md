@@ -73,10 +73,12 @@ rules:
     fields: [title]
 ```
 
-## Get a token source from a daemon adapter
+## Get a token source from the credential daemon
 
 ```go
-src, err := auth.NewDaemonTokenSource(myAdapter{}, "my-provider",
+c := oktad.New() // socket from AGENT_OKTA_D_SOCKET or the platform default
+defer c.Close()
+src, err := auth.NewDaemonTokenSource(c, "my-provider",
 	auth.WithRemediation("run `mytool enroll my-provider`"))
 authz := auth.NewAuthorizer(src)
 client := httpx.NewClient(httpx.Config{Refresher: authz})
@@ -131,3 +133,73 @@ out, err := docgen.Generate(docgen.CommandTree{
 ```
 
 Compare `out` with your checked-in file in a test so the document never drifts.
+
+## Read a retry hint from the daemon adapter
+
+```go
+_, err := c.Fetch(ctx, "my-provider")
+var te *oktad.TransientError
+if errors.As(err, &te) {
+	time.Sleep(te.RetryAfter()) // exit 8; zero means the daemon gave no hint
+}
+```
+
+## Page a list that sits inside an object
+
+```go
+data := struct {
+	Items []Item `json:"items"`
+	Total int    `json:"total"`
+}{items, total}
+env := output.Success(data, &output.Meta{NextPageToken: vendorToken}) // token set by your tool
+err := output.Write(os.Stdout, env, output.Options{
+	Bounds: output.Bounds{MaxBytes: 8192, Offset: offset, ArrayField: "items"},
+})
+// "total" is untouched; meta.count is the items kept; meta.next_offset resumes.
+```
+
+## Nested commands in SKILL.md
+
+```go
+tree := docgen.CommandTree{Name: "mytool", Commands: []docgen.Command{{
+	Name: "mail", Description: "Work with mail.",
+	Subcommands: []docgen.Command{
+		{Name: "send", Usage: "mytool mail send --to <addr>", Examples: []string{"mytool mail send --to a@example.com"}},
+		{Name: "list", Usage: "mytool mail list"},
+	},
+}}}
+```
+
+## Audit with a rule id and extra fields
+
+```go
+err := l.Log(audit.Record{
+	Tool: "mytool", Verb: "create", Resource: "item/9", Outcome: "ok",
+	RuleID: decision.RuleID, TargetRef: "item/9",
+	Extra: &audit.ExtraFields{"batch": "7", "dry_run": "false"},
+})
+```
+
+## Refuse an untrusted policy file
+
+```go
+if err := policy.CheckTrustedFile("/etc/mytool/policy.yaml"); err != nil {
+	fmt.Fprintln(os.Stderr, output.FromError(err).Error.Message)
+	os.Exit(int(output.ExitOf(err))) // 6: policy_denied
+}
+p, err := policy.Load("/etc/mytool/policy.yaml")
+```
+
+## Derive a vendor code from a 403 body
+
+```go
+cfg := httpx.Config{
+	VendorCodeFromBody: func(status int, prefix []byte) string {
+		var v struct{ Code string `json:"code"` }
+		if json.Unmarshal(prefix, &v) != nil {
+			return ""
+		}
+		return v.Code
+	},
+}
+```

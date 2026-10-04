@@ -1,29 +1,32 @@
 # Dev-Flow Implementation Status
 
-**PRD:** agent-cli-core-PRD.md
-**Spec:** specs/archive/261003-agent-cli-core
-**Branch:** feat/agent-cli-core
-**Review PRD:** agent-cli-core-auto-review-PRD.md
-**Process Start:** 2026-10-03T00:00:00Z
-**Process End:** 2026-10-03T21:14:41Z
-**Total Runtime:** see step table
+**PRD:** specs/archive/261003-core-v0-2-daemon-adapter/core-v0-2-daemon-adapter-PRD.md
+**Spec:** specs/archive/261003-core-v0-2-daemon-adapter (review fixes: specs/archive/261004-core-v0-2-daemon-adapter-auto-review)
+**Branch:** feat/core-v0.2
+**Process Start:** 2026-10-03T23:44:32-04:00 (first PRD commit 14fcab9)
+**Process End:** pending (PR opened by orchestrator, step 16)
+**Total Runtime:** about 30 min of commits through step 15 (23:44 to 00:15)
 
 ## Step Summary
 
-| Step | Name | Status | Start | End | Runtime (min) |
-|------|------|--------|-------|-----|---------------|
-| 0  | Optional PRD validation (review-prd) | ✅ Complete (Minor gaps, no blockers) | — | — | — |
-| 1  | Create Spec from PRD            | ✅ Complete | 2026-10-03T20:27:26Z | 2026-10-03T20:30:08Z | 3 |
-| 2  | Review Spec                     | ✅ Complete | 2026-10-03T20:30:08Z | 2026-10-03T20:30:38Z | 1 |
-| 3 | Implement Product | ✅ Complete | 2026-10-03T20:32:01Z | 2026-10-03T20:53:37Z | 22 |
-| 4 | Documentation and User Docs | ✅ Complete | 2026-10-03T20:53:37Z | 2026-10-03T20:59:39Z | 6 |
-| 5 | Code and Design Review | ✅ Complete | 2026-10-03T20:59:39Z | 2026-10-03T21:01:49Z | 2 |
-| 6 | Prepare Review PRD | ✅ Complete | 2026-10-03T21:01:49Z | 2026-10-03T21:02:38Z | 1 |
-| 7 | Archive Original Spec | ✅ Complete | 2026-10-03T21:02:38Z | 2026-10-03T21:03:24Z | 1 |
-| 8 | Spec Review Fixes | ✅ Complete | 2026-10-03T21:03:24Z | 2026-10-03T21:04:51Z | 1 |
-| 9 | Implement Review Fixes | ✅ Complete | 2026-10-03T21:04:51Z | 2026-10-03T21:11:33Z | 7 |
-| 10 | Archive Fixes Spec | ✅ Complete | 2026-10-03T21:11:33Z | 2026-10-03T21:12:10Z | 1 |
-| 11 | Final Quality Pass | ✅ Complete | 2026-10-03T21:12:10Z | 2026-10-03T21:13:34Z | 1 |
-| 12 | Process Analysis Report | ✅ Complete | 2026-10-03T21:13:34Z | 2026-10-03T21:14:41Z | 1 |
-| 13 | Archive Spec | ✅ Complete | 2026-10-03T21:14:41Z | 2026-10-03T21:14:41Z | 1 |
-| 14 | Open Pull Request | ✅ Complete | 2026-10-03T21:14:41Z | 2026-10-03T21:14:58Z | 1 |
+Timestamps are git commit times (local, -04:00); steps without their own commit use the nearest commit.
+
+| Step | Name | Status | Git timestamp |
+|------|------|--------|---------------|
+| 1 | Create PRD | Complete | 2026-10-03T23:44:32 (14fcab9) |
+| 2 | Review PRD | Complete (needs revision, fixed) | 2026-10-03T23:44:45 (3e6c460) |
+| 3 | Create Spec (WS-A, WS-B, WS-C) | Complete | 2026-10-03T23:46:14 (835370d) |
+| 4 | Review Spec | Complete (needs revision, fixed) | 2026-10-03T23:46:34 (39f2c70) |
+| 5 | Implement (auth/oktad, output+docgen, clock+audit+policy+httpx) | Complete | 2026-10-03T23:55:36 (70df4b0) |
+| 6 | Documentation, user-docs, ADRs, CHANGELOG, deferred, api-compat | Complete | 2026-10-04T00:01:09 (895de47) |
+| 7 | Code and Design Review | Complete | 2026-10-04T00:04:43 (50d96ff) |
+| 8 | Prepare Review PRD | Complete | 2026-10-04T00:05:00 (ef545ca) |
+| 9 | Archive Original Spec | Complete | 2026-10-04T00:05:09 (4101092) |
+| 10 | Review Fixes Spec | Complete | 2026-10-04T00:05:33 (0a68cda) |
+| 11 | Implement Review Fixes | Complete | 2026-10-04T00:09:53 (6b6656c) |
+| 11b | Downstream CI job (go.work) | Complete | step 13 commit |
+| 12 | Archive Fixes Spec | Complete | step 13 commit |
+| 13 | Final Quality Pass | Complete (gofmt, vet, golangci-lint 0 issues, race x3, govulncheck clean, tidy clean) | 2026-10-04T00:13 |
+| 14 | Process Analysis Report | Complete (dev-flow-analysis.md) | step 14 commit |
+| 15 | Archive Spec | Complete (4 specs under specs/archive) | step 14 commit |
+| 16 | Open Pull Request | Pending (orchestrator) | - |

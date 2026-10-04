@@ -8,7 +8,7 @@ policy engine, one response envelope with stable exit codes and untrusted-conten
 log, HTTP retry and redaction, a self-test runner and skill-document generation. It is a library: no
 binary, no vendor clients.
 
-**Status: implemented (PRD draft v0.1); no tagged release yet.**
+**Status: implemented (PRD draft v0.1, extended by the v0.2.0 work); no tagged release yet, v0.2.0 is pending its tag.**
 
 ### The wider context
 The agentic-teammate project aims to let AI agents work as real teammates. Each agent runs inside
@@ -53,9 +53,10 @@ Root map: [stainedhead/agentic-teams](https://github.com/stainedhead/agentic-tea
 - **Deploying or operating the agent fleet.**
 
 ## Status and caution
-The library is implemented and tested, but **nothing is released anywhere**. It does not import
-`agent-okta-d`: `auth` defines its own daemon interface, and an adapter over `pkg/client` is deferred
-until `agent-okta-d` publishes a tagged release containing it.
+The library is implemented and tested, but **nothing is released anywhere**: v0.2.0 is unreleased and
+its tag is pending. `auth` defines its own daemon interface and does not import `agent-okta-d`; the
+adapter `auth/oktad` (v0.2.0) wraps `pkg/client` from the tagged `agent-okta-d` v0.1.0 and is the only
+importer of it.
 
 Okta's reach differs by system. Okta directly gates AWS and ServiceNow, which accept its tokens.
 GitHub and Microsoft 365 use the agent's own user account, gated by that account's state plus the

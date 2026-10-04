@@ -7,6 +7,9 @@
 // always yields the same bytes (commands are sorted by name, there are no
 // timestamps), so the file can be checked in and compared in CI.
 //
+// Commands may nest through Command.Subcommands; children render under their
+// parent with the full command path in the heading.
+//
 // The envelope example and the exit code table are built from the real
 // definitions in package output, so the generated text cannot drift from the
 // behavior. The document links to the shared conventions skill (SharedSkill)

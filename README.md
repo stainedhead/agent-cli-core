@@ -2,7 +2,7 @@
 
 `agent-cli-core` is a Go library (module `github.com/stainedhead/agent-cli-core`) holding the behavior shared by the agent-facing CLIs `snow`, `outlook` and `teams`. It has no binary and no vendor clients.
 
-**Status: implemented and tested; no release has been tagged yet.** Until the first tag (planned `0.1.0`) there is no version to depend on; see "Adding the dependency".
+**Status: v0.2.0 is implemented and tested but unreleased: the tag is pending.** Until `v0.2.0` is tagged there is no version to depend on; see "Adding the dependency".
 
 For purpose, wider context and scope boundary, see [INTENT.md](INTENT.md).
 
@@ -22,25 +22,26 @@ flowchart BT
     core --> teams["teams-cli<br/>(teams)"]
 ```
 
-Arrows read "is depended on by". This library does not import `agent-okta-d` yet: `auth` defines its own small daemon interface, and an adapter over `pkg/client` is deferred until that module has a tagged release.
+Arrows read "is depended on by". `auth` defines its own small daemon interface and does not import `agent-okta-d`; the adapter `auth/oktad` (v0.2.0) is the only package that imports its `pkg/client`, and `go.mod` requires `agent-okta-d` v0.1.0.
 
 ## Packages
 
 | Package | Responsibility | Guide |
 |---|---|---|
 | `output` | Response envelope, exit codes 0-9, untrusted-content marking, bounded and pageable output, json/table/text | [output](user-docs/output.md) |
-| `auth` | `TokenSource` / `DaemonClient` interfaces, daemon-backed source, redacting token, 401 refresh hook; `auth/authtest` fakes | [auth](user-docs/auth.md) |
+| `auth` | `TokenSource` / `DaemonClient` interfaces, daemon-backed source, redacting token, 401 refresh hook; `auth/authtest` fakes; `auth/oktad` adapter over the daemon's client | [auth](user-docs/auth.md) |
 | `policy` | Strict-YAML guardrail policy: allow/deny per verb and resource, field allowlists, constraints, write modes, rate limits, caps | [policy](user-docs/policy.md) |
-| `audit` | JSON Lines audit log, no secrets, no bodies | [audit](user-docs/audit.md) |
+| `audit` | JSON Lines audit log, no secrets, no bodies; optional rule id, target ref and bounded extra fields | [audit](user-docs/audit.md) |
 | `httpx` | Retrying HTTP transport: jitter, `Retry-After`, idempotency rules, one refresh on 401, host allow-list and redirect check, redacted tracing | [httpx](user-docs/httpx.md) |
 | `selftest` | Expected-allow/deny matrix runner | [selftest](user-docs/selftest.md) |
-| `docgen` | Deterministic SKILL.md from a command tree | [docgen](user-docs/docgen.md) |
+| `docgen` | Deterministic SKILL.md from a command tree, with nested commands | [docgen](user-docs/docgen.md) |
+| `clock` | Public `Clock` with a real and a fake implementation | [clock](user-docs/clock.md) |
 
-Platforms: darwin/arm64, linux/amd64, linux/arm64 (Windows users: WSL2). Go 1.27. One third-party dependency, `github.com/goccy/go-yaml`, used by `policy`.
+Platforms: darwin/arm64, linux/amd64, linux/arm64 (Windows users: WSL2). Go 1.27. Third-party dependencies: `github.com/goccy/go-yaml` (used by `policy`) and `github.com/stainedhead/agent-okta-d` v0.1.0 (used only by `auth/oktad`).
 
 ## Adding the dependency
 
-No version is tagged yet. Once a release exists, declare it at a released semver tag:
+No version is tagged yet; `v0.2.0` is the pending release. Once it is tagged, declare it at a released semver tag:
 
 ```
 go get github.com/stainedhead/agent-cli-core@vX.Y.Z
@@ -63,7 +64,7 @@ See [Getting started](user-docs/getting-started.md) for the full flow (policy, a
 
 ## Not included, deferred
 
-Human-mode login (browser PKCE, OS keychain), the adapter over `agent-okta-d` `pkg/client`, a conformance test kit, `apidiff` enforcement and release automation are deferred; some PRD items remain unconfirmed. The full list with reasons is in [Assumptions and deferred work](user-docs/README.md#assumptions-and-deferred-work).
+Human-mode login (browser PKCE, OS keychain), a conformance test kit, `apidiff` enforcement and release automation are deferred; some PRD items remain unconfirmed. The full list with reasons is in [Assumptions and deferred work](user-docs/README.md#assumptions-and-deferred-work).
 
 ## Documentation
 
@@ -73,7 +74,7 @@ For developers building a CLI on the library:
 - [Getting started](user-docs/getting-started.md)
 - [Configuration reference](user-docs/configuration.md)
 - [Usage examples](user-docs/examples.md)
-- Per-package guides: [output](user-docs/output.md), [auth](user-docs/auth.md), [policy](user-docs/policy.md), [audit](user-docs/audit.md), [httpx](user-docs/httpx.md), [selftest](user-docs/selftest.md), [docgen](user-docs/docgen.md)
+- Per-package guides: [output](user-docs/output.md), [auth](user-docs/auth.md), [oktad adapter](user-docs/oktad.md), [clock](user-docs/clock.md), [policy](user-docs/policy.md), [audit](user-docs/audit.md), [httpx](user-docs/httpx.md), [selftest](user-docs/selftest.md), [docgen](user-docs/docgen.md)
 
 For contributors:
 
@@ -86,7 +87,7 @@ For contributors:
 
 Part of the set rooted at [stainedhead/agentic-teams](https://github.com/stainedhead/agentic-teams):
 
-- [agent-okta-d](https://github.com/stainedhead/agent-okta-d) - credential daemon; provides `pkg/client`
+- [agent-okta-d](https://github.com/stainedhead/agent-okta-d) - credential daemon; provides `pkg/client`, wrapped by `auth/oktad`
 - [snow-cli](https://github.com/stainedhead/snow-cli) - ServiceNow CLI
 - [outlook-cli](https://github.com/stainedhead/outlook-cli) - mail CLI
 - [teams-cli](https://github.com/stainedhead/teams-cli) - Teams CLI

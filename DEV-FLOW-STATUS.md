@@ -1,29 +1,29 @@
 # Dev-Flow Implementation Status
 
-**PRD:** agent-cli-core-PRD.md
-**Spec:** specs/archive/261003-agent-cli-core
-**Branch:** feat/agent-cli-core
-**Review PRD:** agent-cli-core-auto-review-PRD.md
-**Process Start:** 2026-10-03T00:00:00Z
-**Process End:** 2026-10-03T21:14:41Z
+**PRD:** core-v0-2-daemon-adapter-PRD.md
+**Spec:** (pending)
+**Branch:** feat/core-v0.2
+**Process Start:** 2026-10-03
+**Process End:** -
 **Total Runtime:** see step table
 
 ## Step Summary
 
-| Step | Name | Status | Start | End | Runtime (min) |
-|------|------|--------|-------|-----|---------------|
-| 0  | Optional PRD validation (review-prd) | ✅ Complete (Minor gaps, no blockers) | — | — | — |
-| 1  | Create Spec from PRD            | ✅ Complete | 2026-10-03T20:27:26Z | 2026-10-03T20:30:08Z | 3 |
-| 2  | Review Spec                     | ✅ Complete | 2026-10-03T20:30:08Z | 2026-10-03T20:30:38Z | 1 |
-| 3 | Implement Product | ✅ Complete | 2026-10-03T20:32:01Z | 2026-10-03T20:53:37Z | 22 |
-| 4 | Documentation and User Docs | ✅ Complete | 2026-10-03T20:53:37Z | 2026-10-03T20:59:39Z | 6 |
-| 5 | Code and Design Review | ✅ Complete | 2026-10-03T20:59:39Z | 2026-10-03T21:01:49Z | 2 |
-| 6 | Prepare Review PRD | ✅ Complete | 2026-10-03T21:01:49Z | 2026-10-03T21:02:38Z | 1 |
-| 7 | Archive Original Spec | ✅ Complete | 2026-10-03T21:02:38Z | 2026-10-03T21:03:24Z | 1 |
-| 8 | Spec Review Fixes | ✅ Complete | 2026-10-03T21:03:24Z | 2026-10-03T21:04:51Z | 1 |
-| 9 | Implement Review Fixes | ✅ Complete | 2026-10-03T21:04:51Z | 2026-10-03T21:11:33Z | 7 |
-| 10 | Archive Fixes Spec | ✅ Complete | 2026-10-03T21:11:33Z | 2026-10-03T21:12:10Z | 1 |
-| 11 | Final Quality Pass | ✅ Complete | 2026-10-03T21:12:10Z | 2026-10-03T21:13:34Z | 1 |
-| 12 | Process Analysis Report | ✅ Complete | 2026-10-03T21:13:34Z | 2026-10-03T21:14:41Z | 1 |
-| 13 | Archive Spec | ✅ Complete | 2026-10-03T21:14:41Z | 2026-10-03T21:14:41Z | 1 |
-| 14 | Open Pull Request | ✅ Complete | 2026-10-03T21:14:41Z | 2026-10-03T21:14:58Z | 1 |
+| Step | Name | Status |
+|------|------|--------|
+| 1 | Create PRD | In progress |
+| 2 | Review PRD | Pending |
+| 3 | Create Spec (3 parallel workstreams: WS-A, WS-B, WS-C) | Pending |
+| 4 | Review Spec | Pending |
+| 5 | Implement (WS-A auth/oktad, WS-B output+docgen, WS-C clock+audit+policy+httpx) | Pending |
+| 6 | Documentation, user-docs, ADRs, CHANGELOG, deferred, api-compat | Pending |
+| 7 | Code and Design Review | Pending |
+| 8 | Prepare Review PRD | Pending |
+| 9 | Archive Original Spec | Pending |
+| 10 | Review Fixes Spec | Pending |
+| 11 | Implement Review Fixes | Pending |
+| 12 | Archive Fixes Spec | Pending |
+| 13 | Final Quality Pass | Pending |
+| 14 | Process Analysis Report | Pending |
+| 15 | Archive Spec | Pending |
+| 16 | Open Pull Request | Pending |

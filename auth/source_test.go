@@ -276,3 +276,14 @@ func TestDaemonTokenSourceCategorizedErrorDoesNotLeak(t *testing.T) {
 		t.Fatalf("exit %d", output.ExitOf(err))
 	}
 }
+
+func TestDaemonTokenSourceContextErrorsStayGeneral(t *testing.T) {
+	for _, ce := range []error{context.Canceled, context.DeadlineExceeded} {
+		src, _ := auth.NewDaemonTokenSource(badClient{err: fmt.Errorf("oktad: %w", ce)}, "p")
+		_, err := src.Token(context.Background())
+		var te *auth.TokenError
+		if !errors.Is(err, ce) || errors.As(err, &te) || output.ExitOf(err) != output.ExitGeneral {
+			t.Errorf("%v: err %v exit %d", ce, err, output.ExitOf(err))
+		}
+	}
+}

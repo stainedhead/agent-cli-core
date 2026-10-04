@@ -104,6 +104,11 @@ func (s *DaemonTokenSource) result(t Token, err error, op string) (Token, error)
 	if errors.As(err, &ce) {
 		return Token{}, &categorizedError{err: err}
 	}
+	// The caller's own cancellation or deadline is not an auth failure: it
+	// keeps its general category (exit 1) and errors.Is on the context error.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return Token{}, &categorizedError{err: err}
+	}
 	return Token{}, &TokenError{Provider: s.provider, Op: op, Err: err}
 }
 

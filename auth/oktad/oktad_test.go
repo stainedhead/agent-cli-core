@@ -414,3 +414,27 @@ func TestThroughDaemonTokenSourceKeepsAdapterErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestThroughDaemonTokenSourceCancelledContextIsGeneral(t *testing.T) {
+	srv := newFake(t)
+	srv.SetDelay(2 * time.Second)
+	src, err := auth.NewDaemonTokenSource(newClient(t, srv), "graph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = src.Token(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("errors.Is deadline: %v", err)
+	}
+	var tok *auth.TokenError
+	if errors.As(err, &tok) || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("exit %d, err %v", output.ExitOf(err), err)
+	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	cancel2()
+	if _, err = src.Refresh(ctx2); !errors.Is(err, context.Canceled) || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("cancel: exit %d, err %v", output.ExitOf(err), err)
+	}
+}

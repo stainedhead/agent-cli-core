@@ -4,6 +4,7 @@
 
 ### Fixed
 - auth: `DaemonTokenSource` no longer wraps every unknown daemon error in `*auth.TokenError`. An error that already carries a category (`output.CategoryError` anywhere in its chain) is returned with that category, its hint and its cause chain intact, so `*oktad.TransientError` (rate_limited, exit 8, retry hint) and `*oktad.AccessError` (auth, exit 3, own hint) reach the CLI unchanged; before, a degraded daemon exited 3 and lost its retry hint. The message and hint are still scrubbed of secrets. Errors without a category are still wrapped in `*auth.TokenError` (exit 3). The new type is unexported; no API change.
+- auth: a cancelled or timed-out caller context (`context.Canceled`, `context.DeadlineExceeded`, as the adapter reports it) passing through `DaemonTokenSource` is no longer turned into an auth-category `*auth.TokenError` (exit 3); it keeps the general category (exit 1) and `errors.Is` on the context error still works.
 - httpx: `AuthError` (401 then failed token refresh) now reports the refresh failure's own category and hint when it has one, so the same exit 8 and retry hint survive the 401 path. A refresh failure without a category keeps category auth and the generic hint; a categorized one (for example `*auth.ActionRequiredError`) now shows its own hint instead of the generic one.
 
 ## v0.2.0 - 2026-10-04
